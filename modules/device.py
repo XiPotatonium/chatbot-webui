@@ -4,6 +4,9 @@ import time
 from typing import Any, Dict, Iterator, List, Set
 import importlib
 import sys
+from .sym import sym_tbl
+
+import torch
 
 
 def check_installed(package_name: str):
@@ -108,3 +111,11 @@ def alloc_cuda(
                 "desc": str(pynvml.nvmlDeviceGetName(handle)),
                 "driver": driver
             }
+
+
+def empty_cache():
+    if sym_tbl().device.type != "cpu":
+        with torch.cuda.device(sym_tbl().device):
+            # empty cache uses GPU 0 by default
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()

@@ -1,8 +1,14 @@
 # __future__.annotations will become the default in Python 3.11
 from __future__ import annotations
-from typing import Any, Dict, List, MutableMapping, Optional, Type
+from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping, Optional, Type
 import torch
-from transformers import AutoModel, AutoTokenizer
+from rich.console import Console
+
+
+if TYPE_CHECKING:
+    from .history import History
+    from .model import Model
+    from .proto import Proto
 
 
 class MissingKey(RuntimeError):
@@ -13,10 +19,16 @@ class NoFrame(RuntimeError):
     pass
 
 
+# must be json serializable
+DEFAULT_CFG = {
+    "model_base_dir": "models",
+    "history_dir": "history",
+}
+
+
 class SymbolTbl:
     def __init__(self):
         self.reset()
-        self.registry: Dict[Type, Dict[str, Type]] = {}
 
     def reset(self):
         # NOTE: reset should not reset the registered modules
@@ -26,13 +38,14 @@ class SymbolTbl:
         self._frames: List[Dict[str, Any]] = []
         self._global: Dict[str, Any] = {}
 
-        self.cfg: MutableMapping[str, Any] = {}
+        self.console = Console()
+
+        self.cfg: MutableMapping[str, Any] = DEFAULT_CFG
         self.device_info: Optional[Dict[str, Any]] = None
         self.device: Optional[torch.device] = None
-        self.model: Optional[AutoModel] = None
-        self.tokenizer: Optional[AutoTokenizer] = None
-        self.history = []
-        self.readable_history = []
+        self.model: Optional[Model] = None
+        self.history: Optional[History] = None
+        self.proto: Optional[Proto] = None
 
     def set(self, key, value):
         """设置当前局部作用域的值
