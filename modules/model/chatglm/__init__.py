@@ -68,6 +68,7 @@ class ChatGLMModel(Model):
         sym_tbl().history.storage[-1]["response"]["text"] = output
         sym_tbl().history.append_last_inference()
         sym_tbl().history.append_last_response_binding()
+        # logger.debug(sym_tbl().history.storage[-1])
 
 
 CHATGLM_CSS = """

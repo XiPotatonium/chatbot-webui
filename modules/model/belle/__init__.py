@@ -83,7 +83,7 @@ class BelleModel(Model):
         s = generation_output.sequences[0]
         output = self.tokenizer.decode(s, skip_special_token=True)
         # print("bot: {}".format(output.split("### Response:")[1].strip()))
-        logger.debug(prompt)
+        # logger.debug(prompt)
         output = output[len(prompt):].strip()
 
         empty_cache()

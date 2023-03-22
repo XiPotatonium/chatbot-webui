@@ -12,15 +12,12 @@ _css = """
     height: 2.5em;
     margin: 1.5em 0;
 }
-#chatbot {
-    min-height: 42em;
-    height: 100%;
-}
-#chatpanel {
-    min-height: 42em;
-    height: 100%;
-}
 """
+
+# #chatbot {
+#     height: 100%;
+#     overflow: auto !important;
+# }
 
 
 def send(instruction: str, msg: str, mm_ty, img, audio, video):
@@ -29,8 +26,8 @@ def send(instruction: str, msg: str, mm_ty, img, audio, video):
         sym_tbl().history.save()
 
     new_storage = sym_tbl().history.storage_meta()
-    new_storage["query"]["text"] = msg
-    new_storage["query"]["instruction"] = instruction
+    new_storage["query"]["text"] = msg if msg is not None else ""
+    new_storage["query"]["instruction"] = instruction if instruction is not None else ""
     if (
         (mm_ty == "Image" and img is not None) or
         (mm_ty == "Audio" and audio is not None) or
@@ -40,6 +37,8 @@ def send(instruction: str, msg: str, mm_ty, img, audio, video):
         new_storage["query"]["mm_path"] = sym_tbl().history.save_media(img).name
     sym_tbl().history.storage.append(new_storage)
     sym_tbl().history.append_last_query_binding()
+
+    # logger.debug(new_storage)
 
     return sym_tbl().history.binding
 
@@ -61,7 +60,7 @@ def create_ui():
         with gr.Tab("Chatbot"):
             with gr.Row():
                 with gr.Column(scale=7, elem_id="chatpanel"):
-                    chatbot = gr.Chatbot(elem_id="chatbot", show_label=False)
+                    chatbot = gr.Chatbot(elem_id="chatbot", show_label=False).style(height=700)
 
                 with gr.Column(scale=3):
                     with gr.Row():
@@ -75,9 +74,9 @@ def create_ui():
                     with gr.Row():
                         with gr.Column(variant="panel"):
                             with gr.Accordion("Instruction", open=False):
-                                instruction = gr.Textbox(lines=2, placeholder="Your instruction here...", show_label=False)
+                                instruction = gr.Textbox(lines=2, placeholder="Your instruction here...", show_label=False).style(container=False)
                             with gr.Row():
-                                msg = gr.Textbox(label="Input", placeholder="Type your text...", show_label=False, lines=2)
+                                msg = gr.Textbox(label="Input", placeholder="Type your text...", show_label=False, lines=2).style(container=False)
                             with gr.Row():
                                 with gr.Accordion("Media", open=False):
                                     with gr.Row():

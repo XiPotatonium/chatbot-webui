@@ -74,6 +74,7 @@ class History:
                 wf.write("\n")
 
     def flush_last_rounds(self, pos: int = -1):
+        # logger.debug(sym_tbl().history.storage[-1])
         with (self.folder / "history.jsonl").open('a', encoding="utf8") as wf:
             for s_item in self.storage[pos:]:
                 wf.write(json.dumps(s_item, ensure_ascii=False))
