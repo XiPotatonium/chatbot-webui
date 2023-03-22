@@ -1,0 +1,12 @@
+{
+    "model_path": "models/lm/llama-7b-hf",
+    "lora_path": "models/lora/alpaca-lora-7b",
+    "proto": {
+        "model": "llama.LlamaHFModel",
+        "history": "llama.LlamaHFHistory",
+        "ui": {
+            "css": "llama.LLAMAHF_CSS",
+            "builder": "llama.llamahf_ui"
+        }
+    }
+}

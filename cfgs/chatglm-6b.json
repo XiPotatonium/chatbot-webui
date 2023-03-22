@@ -1,0 +1,12 @@
+{
+    "model_path": "models/lm/chatglm-6b",
+    "prec": "fp16",
+    "proto": {
+        "model": "chatglm.ChatGLMModel",
+        "history": "chatglm.ChatGLMHistory",
+        "ui": {
+            "css": "chatglm.CHATGLM_CSS",
+            "builder": "chatglm.chatglm_ui"
+        }
+    }
+}

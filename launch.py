@@ -1,5 +1,6 @@
+import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from loguru import logger
 from rich.logging import RichHandler
 import typer
@@ -15,13 +16,13 @@ app = typer.Typer()
 
 @app.command()
 def main(
-    model_path: str = "models/lm/chatglm-6b",
-    prec: str = "fp16",
+    cfg: str,
     device: Optional[List[int]] = None,
     listen: bool = True,
     port: int = 7860,
     share: bool = False,
     debug: bool = False,
+    load_model: bool = True,
 ):
     # config logger
     logger.remove()  # remove default stdout logger
@@ -33,22 +34,25 @@ def main(
     # setup dir if not exists
     Path(sym_tbl().cfg["history_dir"]).mkdir(parents=True, exist_ok=True)
 
-    sym_tbl().cfg.update({
-        "model_path": model_path,
-        "prec": prec,
+    with Path(cfg).open('r', encoding="utf8") as rf:
+        pycfg: Dict[str, Any] = json.load(rf)
+    pycfg.update({
+        "cfg": cfg,
         "device": device,
         "listen": listen,
         "port": port,
         "share": share,
         "debug": debug,
+        "load_model": load_model,
     })
+    sym_tbl().cfg.update(pycfg)
 
     sym_tbl().device_info = alloc1([] if device is None else device)
     sym_tbl().device = torch.device(sym_tbl().device_info["device"])
 
     update_proto()
     sym_tbl().proto.history.new()
-    if not debug:
+    if load_model:
         sym_tbl().proto.model.load()
 
     with torch.no_grad():

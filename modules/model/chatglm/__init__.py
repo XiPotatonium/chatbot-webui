@@ -1,4 +1,6 @@
+import sys
 from loguru import logger
+import torch
 from ...sym import sym_tbl
 from ...device import empty_cache
 from .. import Model
@@ -8,30 +10,19 @@ from typing import Any, Dict, Tuple, Union
 import gradio as gr
 
 
-def parse_codeblock(text):
-    lines = text.split("\n")
-    for i, line in enumerate(lines):
-        if "```" in line:
-            if line != "```":
-                lines[i] = f'<pre><code class="{lines[i][3:]}">'
-            else:
-                lines[i] = '</code></pre>'
-        else:
-            if i > 0:
-                lines[i] = "<br/>" + line.replace("<", "&lt;").replace(">", "&gt;")
-    return "".join(lines)
-
-
 class ChatGLMHistory(History):
-    def storage2inference(self, item: Dict[str, Any]):
-        return (item["query"], item["response"])
+    def append_inference(self, item: Dict[str, Any]):
+        self.inference.append((item["query"]['text'], item["response"]['text']))
 
 
 class ChatGLMModel(Model):
     @classmethod
     def load(cls):
         tokenizer = AutoTokenizer.from_pretrained(sym_tbl().cfg["model_path"], trust_remote_code=True)
-        model = AutoModel.from_pretrained(sym_tbl().cfg["model_path"], trust_remote_code=True)
+        model = AutoModel.from_pretrained(
+            sym_tbl().cfg["model_path"], trust_remote_code=True,
+            # device_map="auto"
+        )
 
         if sym_tbl().device_info["device"] == "cpu":
             model = model.float()
@@ -45,6 +36,9 @@ class ChatGLMModel(Model):
                 model = model.half().quantize(8)
         model.to(sym_tbl().device)
         model.eval()
+        if torch.__version__ >= "2" and sys.platform != "win32":
+            logger.info("Use torch.compile")
+            model = torch.compile(model)
         sym_tbl().model = cls(tokenizer, model)
 
     def __init__(self, tokenizer, model) -> None:
@@ -57,25 +51,23 @@ class ChatGLMModel(Model):
         empty_cache()
 
     def forward(self, max_length, top_p, temperature, **kwargs):
-        query, _ = sym_tbl().history.binding[-1]
-        if isinstance(query, str):
-            iquery = query
-        elif isinstance(query, tuple):
+        query = sym_tbl().history.storage[-1]["query"]
+        if len(query["mm_type"]) != 0:
             logger.warning(f"{self.__class__.__name__} is a text-only model, but got mm query. The media is ignored and only the text is used.")
-            _, iquery = query
-            assert iquery is not None
-        else:
-            raise ValueError(f"query must be str for {self.__class__.__name__} model, but got {type(query)}")
+        if len(query["instruction"]) != 0:
+            logger.warning(f"{self.__class__.__name__} do not support instruction. It will be ignored")
+        tquery = query["text"]
 
         output, _ = self.model.chat(
-            self.tokenizer, query=iquery, history=sym_tbl().history.inference,
+            self.tokenizer, query=tquery, history=sym_tbl().history.inference,
             max_length=max_length,
             top_p=top_p,
             temperature=temperature
         )
         empty_cache()
-        sym_tbl().history.binding[-1] = (query, output)
-        sym_tbl().history.inference.append((iquery, output))
+        sym_tbl().history.storage[-1]["response"]["text"] = output
+        sym_tbl().history.append_last_inference()
+        sym_tbl().history.append_last_response_binding()
 
 
 CHATGLM_CSS = """

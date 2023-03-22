@@ -5,6 +5,15 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Python: demo",
+      "type": "python",
+      "request": "launch",
+      "program": "demo.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["llama"]
+    },
+    {
       "name": "Python: launch",
       "type": "python",
       "request": "launch",

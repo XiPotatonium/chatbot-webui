@@ -1,7 +1,7 @@
 from abc import abstractmethod
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from loguru import logger
 from .sym import sym_tbl
@@ -13,8 +13,9 @@ class History:
     def storage_meta():
         return {
             "query": {
+                "instruction": "",
                 "text": "",
-                "mm_type": "",
+                "mm_type": "",          # Image/Video/Audio
                 "mm_path": "",
             },
             "response": {
@@ -38,14 +39,15 @@ class History:
 
     @classmethod
     def load(cls, folder: Path):
-        history = cls(folder.name, folder)
         with (folder / "meta.json").open('r', encoding="utf8") as rf:
-            history.meta = json.load(rf)
+            meta = json.load(rf)
+        history = cls(folder.name, folder, meta)
         with (folder / "history.jsonl").open('r', encoding="utf8") as rf:
             for line in rf:
-                item = json.loads(line)
-                history.binding.append(history.storage2binding(item))
-                history.inference.append(history.storage2inference(item))
+                history.storage.append(json.loads(line))
+                history.append_last_inference()
+                history.append_last_query_binding()
+                history.append_last_response_binding()
 
         sym_tbl().history = history
 
@@ -59,6 +61,7 @@ class History:
         self.id = id
         self.binding: List[Tuple[Union[str, None, Tuple], Union[str, None, Tuple]]] = []           # Used in chatbot for rendering
         self.inference = []         # Used in model inference
+        self.storage: List[Dict[str, Any]] = []
         self.meta = meta
 
     def save(self):
@@ -66,15 +69,15 @@ class History:
         with (self.folder / "meta.json").open('w', encoding="utf8") as wf:
             json.dump(self.meta, wf, ensure_ascii=False)
         with (self.folder / "history.jsonl").open('w', encoding="utf8") as wf:
-            for inference_item, binding_item in zip(self.inference, self.binding):
-                wf.write(json.dumps(self.ib2storage(inference_item, binding_item), ensure_ascii=False))
+            for s_item in self.storage:
+                wf.write(json.dumps(s_item, ensure_ascii=False))
                 wf.write("\n")
 
     def flush_last_rounds(self, pos: int = -1):
         with (self.folder / "history.jsonl").open('a', encoding="utf8") as wf:
-            for inference_item, binding_item in zip(self.inference[pos:], self.binding[pos:]):
-                wf.write(json.dumps(self.ib2storage(inference_item, binding_item), ensure_ascii=False))
-                wf.write('\n')
+            for s_item in self.storage[pos:]:
+                wf.write(json.dumps(s_item, ensure_ascii=False))
+                wf.write("\n")
 
     def save_media(self, media) -> Path:
         from PIL import Image
@@ -95,7 +98,7 @@ class History:
         return mm_path
 
     @abstractmethod
-    def storage2inference(self, item: Dict[str, Any]):
+    def append_inference(self, item: Dict[str, Any]):
         """Used in loading history from file
 
         Args:
@@ -103,63 +106,28 @@ class History:
         """
         pass
 
-    def storage2binding(self, item: Dict[str, Any]) -> Tuple[Union[str, None, Tuple], Union[str, None, Tuple]]:
-        """Used in loading history from file
+    def append_last_inference(self):
+        self.append_inference(self.storage[-1])
 
-        Args:
-            item (Dict[str, Any]): _description_
+    def append_last_query_binding(self):
+        if (
+            (len(self.storage) > 1 and self.storage[-1]["query"]["instruction"] != self.storage[-2]["query"]["instruction"]) or
+            (len(self.storage) == 1 and len(self.storage[-1]["query"]["instruction"]) != 0)
+        ):
+            self.binding.append((f"[INSTRUCTION]: {self.storage[-1]['query']['instruction']}", None))
 
-        Raises:
-            ValueError: _description_
+        info = self.storage[-1]["query"]
+        if len(info["mm_type"]) != 0:
+            self.binding.append(((self.folder / info["mm_path"], ), None))
+        if len(info["text"]) != 0:
+            self.binding.append((info["text"], None))
 
-        Returns:
-            Tuple[Union[str, None, Tuple], Union[str, None, Tuple]]: _description_
-        """
-        def _s2b(info: Dict[str, Any]):
-            if info["mm_type"] == "":
-                return item["text"]
-            else:
-                return (self.folder / item["mm_path"], item["text"])
-        return _s2b(item["query"]), _s2b(item["response"])
-
-    def ib2storage(self, inference_item, binding_item: Tuple[Union[str, None, Tuple], Union[str, None, Tuple]]):
-        """You can override this method to add extra field in storage with inference_item
-        Used in storing history
-
-        Args:
-            inference_item (_type_): _description_
-            binding_item (Tuple[Union[str, None, Tuple], Union[str, None, Tuple]]): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        def _b2s(res: Dict[str, Any], info: Union[str, None, Tuple]):
-            if isinstance(info, str):
-                res["text"] = info
-            elif isinstance(info, tuple):
-                path, text = info
-                if path.suffix == ".png":
-                    res["mm_type"] = "Image"
-                else:
-                    raise NotImplementedError()
-                res["text"] = text
-                res["mm_path"] = path.name
-        item = self.storage_meta()
-        _b2s(item["query"], binding_item[0])
-        _b2s(item["response"], binding_item[1])
-        return item
-
-    @abstractmethod
-    def inference2binding(self, item) -> Tuple[Union[str, None, Tuple], Union[str, None, Tuple]]:
-        """Used in updating chatbot after inference
-
-        Args:
-            item (_type_): _description_
-
-        Returns:
-            Tuple[Union[str, None, Tuple], Union[str, None, Tuple]]: _description_
-        """
-        pass
+    def append_last_response_binding(self):
+        info = self.storage[-1]["response"]
+        if len(info["mm_type"]) != 0:
+            self.binding.append((None, (self.folder / info["mm_path"],)))
+        if len(info["text"]) != 0:
+            self.binding.append((None, info["text"]))
 
 
 def parse_codeblock(text):

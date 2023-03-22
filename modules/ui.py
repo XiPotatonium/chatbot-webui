@@ -23,20 +23,24 @@ _css = """
 """
 
 
-def send(msg: str, mm_ty, img, audio, video):
+def send(instruction: str, msg: str, mm_ty, img, audio, video):
     if not sym_tbl().history.folder.exists():
         # lazy create dir
         sym_tbl().history.save()
 
-    if mm_ty == "Image" and img is not None:
-        msg = (sym_tbl().history.save_media(img), msg)
-    elif mm_ty == "Audio" and audio is not None:
-        msg = (sym_tbl().history.save_media(audio), msg)
-    elif mm_ty == "Video" and video is not None:
-        msg = (sym_tbl().history.save_media(video), msg)
-    logger.debug(msg)
+    new_storage = sym_tbl().history.storage_meta()
+    new_storage["query"]["text"] = msg
+    new_storage["query"]["instruction"] = instruction
+    if (
+        (mm_ty == "Image" and img is not None) or
+        (mm_ty == "Audio" and audio is not None) or
+        (mm_ty == "Video" and video is not None)
+    ):
+        new_storage["query"]["mm_type"] = mm_ty
+        new_storage["query"]["mm_path"] = sym_tbl().history.save_media(img).name
+    sym_tbl().history.storage.append(new_storage)
+    sym_tbl().history.append_last_query_binding()
 
-    sym_tbl().history.binding.append((msg, None))
     return sym_tbl().history.binding
 
 
@@ -53,7 +57,7 @@ def refresh_chats():
 
 
 def create_ui():
-    with gr.Blocks(css=_css + sym_tbl().proto.css) as ui:
+    with gr.Blocks(css=_css + sym_tbl().proto.ui.css) as ui:
         with gr.Tab("Chatbot"):
             with gr.Row():
                 with gr.Column(scale=7, elem_id="chatpanel"):
@@ -70,7 +74,10 @@ def create_ui():
 
                     with gr.Row():
                         with gr.Column(variant="panel"):
-                            msg = gr.Textbox(placeholder="Type your text...", show_label=False, lines=4)
+                            with gr.Accordion("Instruction", open=False):
+                                instruction = gr.Textbox(lines=2, placeholder="Your instruction here...", show_label=False)
+                            with gr.Row():
+                                msg = gr.Textbox(label="Input", placeholder="Type your text...", show_label=False, lines=2)
                             with gr.Row():
                                 with gr.Accordion("Media", open=False):
                                     with gr.Row():
@@ -86,7 +93,7 @@ def create_ui():
                                 submit = gr.Button("Send")
                     with gr.Row():
                         # model specific configuration ui
-                        cfgs = sym_tbl().proto.ui()
+                        cfgs = sym_tbl().proto.ui.builder()
         with gr.Tab("Settings"):
             pass
 
@@ -97,6 +104,10 @@ def create_ui():
         ).then(
             # update chatbot
             fn=lambda: sym_tbl().history.binding, outputs=[chatbot]
+        ).then(
+            # update instruction
+            fn=lambda: "" if len(sym_tbl().history.storage) == 0 else sym_tbl().history.storage[-1]["query"]["instruction"],
+            outputs=[instruction]
         )
         btn_refresh_chats.click(
             # refresh chatlist
@@ -117,7 +128,7 @@ def create_ui():
 
         submit.click(
             # update chatbot with input text, mkdir if new chat
-            fn=send, inputs=[msg, dp_mm, img, audio, video], outputs=[chatbot]
+            fn=send, inputs=[instruction, msg, dp_mm, img, audio, video], outputs=[chatbot]
         ).then(
             # select current
             fn=lambda: sym_tbl().history.folder.name, outputs=[dp_chats]
