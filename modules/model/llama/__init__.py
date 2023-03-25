@@ -49,7 +49,7 @@ class LlamaHFModel(Model):
         del self.tokenizer
         empty_cache()
 
-    def forward(self, max_length, topp, topk, temperature, beams, **kwargs):
+    def forward(self, max_tokens, top_p, top_k, temperature, beams, **kwargs):
         def generate_prompt(instruction, input=None):
             if input:
                 return f"""Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
@@ -76,8 +76,8 @@ class LlamaHFModel(Model):
         input_ids = inputs["input_ids"].to(sym_tbl().device)
         generation_config = GenerationConfig(
             temperature=temperature,
-            top_p=topp,
-            top_k=topk,
+            top_p=top_p,
+            top_k=top_k,
             num_beams=beams,
             **kwargs,
         )
@@ -87,7 +87,7 @@ class LlamaHFModel(Model):
                 generation_config=generation_config,
                 return_dict_in_generate=True,
                 output_scores=True,
-                max_new_tokens=max_length,
+                max_new_tokens=max_tokens,
             )
         s = generation_output.sequences[0]
         output = self.tokenizer.decode(s)
@@ -106,16 +106,15 @@ LLAMA_HF_CSS = """
 def llama_hf_ui():
     with gr.Column(variant="panel"):
         with gr.Row():
-            max_length = gr.Slider(minimum=1, maximum=2000, step=1, label='Max Length', value=128)
+            max_tokens = gr.Slider(minimum=1, maximum=2000, step=1, label='max_tokens', value=128)
         with gr.Row():
-            topp = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='Top P', value=0.75)
+            top_p = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='top_p', value=0.75)
+            top_k = gr.Slider(minimum=0, maximum=100, step=1, label='top_k', value=40)
         with gr.Row():
-            topk = gr.Slider(minimum=0, maximum=100, step=1, label='Top K', value=40)
+            temperature = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='temperature', value=0.1)
         with gr.Row():
-            temperature = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='Temperature', value=0.1)
-        with gr.Row():
-            beams = gr.Slider(minimum=1, maximum=4, step=1, label='Beams', value=4)
+            beams = gr.Slider(minimum=1, maximum=4, step=1, label='beams', value=4)
 
         # with gr.Row():
         #     max_rounds = gr.Slider(minimum=1, maximum=50, step=1, label="最大对话轮数（调小可以显著改善爆显存，但是会丢失上下文）", value=20)
-    return [max_length, topp, topk, temperature, beams]
+    return [max_tokens, top_p, top_k, temperature, beams]

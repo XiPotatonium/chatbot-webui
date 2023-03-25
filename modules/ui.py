@@ -57,44 +57,41 @@ def refresh_chats():
 
 def create_ui():
     with gr.Blocks(css=_css + sym_tbl().proto.ui.css) as ui:
-        with gr.Tab("Chatbot"):
-            with gr.Row():
-                with gr.Column(scale=7, elem_id="chatpanel"):
-                    chatbot = gr.Chatbot(elem_id="chatbot", show_label=False).style(height=700)
+        with gr.Row():
+            with gr.Column(scale=7, elem_id="chatpanel"):
+                chatbot = gr.Chatbot(elem_id="chatbot", show_label=False).style(height=700)
 
-                with gr.Column(scale=3):
-                    with gr.Row():
-                        with gr.Column(variant="panel"):
-                            with gr.Row():
-                                dp_chats = gr.Dropdown(show_label=False, choices=lst_chats())
-                                btn_refresh_chats = gr.Button("♻", elem_id="icon-btn")
-                            with gr.Row():
-                                btn_new_chat = gr.Button("New Chat")
+            with gr.Column(scale=3):
+                with gr.Row():
+                    with gr.Column(variant="panel"):
+                        with gr.Row():
+                            dp_chats = gr.Dropdown(show_label=False, choices=lst_chats())
+                            btn_refresh_chats = gr.Button("♻", elem_id="icon-btn")
+                        with gr.Row():
+                            btn_new_chat = gr.Button("New Chat")
 
-                    with gr.Row():
-                        with gr.Column(variant="panel"):
-                            with gr.Accordion("Instruction", open=False):
-                                instruction = gr.Textbox(lines=2, placeholder="Your instruction here...", show_label=False).style(container=False)
-                            with gr.Row():
-                                msg = gr.Textbox(label="Input", placeholder="Type your text...", show_label=False, lines=2).style(container=False)
-                            with gr.Row():
-                                with gr.Accordion("Media", open=False):
-                                    with gr.Row():
-                                        dp_mm = gr.Dropdown(["Image", "Audio", "Video"], label="Use", show_label=True)
-                                    with gr.Row():
-                                        with gr.Tab("Image"):
-                                            img = gr.Image(label=False, type="pil")
-                                        with gr.Tab("Audio"):
-                                            audio = gr.Audio(label=False, interactive=False)
-                                        with gr.Tab("Video"):
-                                            video = gr.Video(label=False, interactive=False)
-                            with gr.Row():
-                                submit = gr.Button("Send")
-                    with gr.Row():
-                        # model specific configuration ui
-                        cfgs = sym_tbl().proto.ui.builder()
-        with gr.Tab("Settings"):
-            pass
+                with gr.Row():
+                    with gr.Column(variant="panel"):
+                        with gr.Accordion("Instruction", open=False):
+                            instruction = gr.Textbox(lines=2, placeholder="Your instruction here...", show_label=False).style(container=False)
+                        with gr.Row():
+                            msg = gr.Textbox(label="Input", placeholder="Type your text...", show_label=False, lines=2).style(container=False)
+                        with gr.Row():
+                            with gr.Accordion("Media", open=False):
+                                with gr.Row():
+                                    dp_mm = gr.Dropdown(["Image", "Audio", "Video"], label="Use", show_label=True)
+                                with gr.Row():
+                                    with gr.Tab("Image"):
+                                        img = gr.Image(label=False, type="pil")
+                                    with gr.Tab("Audio"):
+                                        audio = gr.Audio(label=False, interactive=False)
+                                    with gr.Tab("Video"):
+                                        video = gr.Video(label=False, interactive=False)
+                        with gr.Row():
+                            submit = gr.Button("Send")
+                with gr.Row():
+                    # model specific configuration ui
+                    cfgs = sym_tbl().proto.ui.builder()
 
         dp_chats.select(
             # load history

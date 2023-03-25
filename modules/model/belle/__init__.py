@@ -45,10 +45,10 @@ class BelleModel(Model):
 
     def forward(
             self,
-            max_length=200,
+            max_tokens=200,
             do_sample=True,
-            topp=0.85,
-            topk=30,
+            top_p=0.85,
+            top_k=30,
             temperature=0.35,
             repetition_penalty=1.2,
             **kwargs
@@ -66,8 +66,8 @@ class BelleModel(Model):
         input_ids = inputs["input_ids"].to(sym_tbl().device)
         generation_config = GenerationConfig(
             temperature=temperature,
-            top_p=topp,
-            top_k=topk,
+            top_p=top_p,
+            top_k=top_k,
             do_sample=do_sample,
             repetition_penalty=repetition_penalty,
             **kwargs,
@@ -78,7 +78,7 @@ class BelleModel(Model):
                 generation_config=generation_config,
                 return_dict_in_generate=True,
                 output_scores=True,
-                max_new_tokens=max_length,
+                max_new_tokens=max_tokens,
             )
         s = generation_output.sequences[0]
         output = self.tokenizer.decode(s, skip_special_token=True)
@@ -98,10 +98,10 @@ BELLE_CSS = """
 def belle_ui():
     with gr.Column(variant="panel"):
         with gr.Row():
-            max_length = gr.Slider(minimum=1, maximum=2000, step=1, label='max_length', value=200)
+            max_tokens = gr.Slider(minimum=1, maximum=2000, step=1, label='max_tokens', value=200)
         with gr.Row():
-            topp = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='topp', value=0.85)
-            topk = gr.Slider(minimum=0, maximum=100, step=1, label='topk', value=30)
+            top_p = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='top_p', value=0.85)
+            top_k = gr.Slider(minimum=0, maximum=100, step=1, label='top_k', value=30)
         with gr.Row():
             do_sample = gr.Checkbox(label='do_sample', value=True)
             temperature = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='temperature', value=0.35)
@@ -110,4 +110,4 @@ def belle_ui():
 
         # with gr.Row():
         #     max_rounds = gr.Slider(minimum=1, maximum=50, step=1, label="最大对话轮数（调小可以显著改善爆显存，但是会丢失上下文）", value=20)
-    return [max_length, do_sample, topp, topk, temperature, repetition_penalty]
+    return [max_tokens, do_sample, top_p, top_k, temperature, repetition_penalty]

@@ -50,7 +50,7 @@ class ChatGLMModel(Model):
         del self.tokenizer
         empty_cache()
 
-    def forward(self, max_length, top_p, temperature, **kwargs):
+    def forward(self, max_tokens, top_p, temperature, **kwargs):
         query = sym_tbl().history.storage[-1]["query"]
         if len(query["mm_type"]) != 0:
             logger.warning(f"{self.__class__.__name__} is a text-only model, but got mm query. The media is ignored and only the text is used.")
@@ -60,7 +60,7 @@ class ChatGLMModel(Model):
 
         output, _ = self.model.chat(
             self.tokenizer, query=tquery, history=sym_tbl().history.inference,
-            max_length=max_length,
+            max_length=max_tokens,
             top_p=top_p,
             temperature=temperature
         )
@@ -77,12 +77,11 @@ CHATGLM_CSS = """
 def chatglm_ui():
     with gr.Column(variant="panel"):
         with gr.Row():
-            max_length = gr.Slider(minimum=4, maximum=4096, step=4, label='Max Length', value=2048)
+            max_tokens = gr.Slider(minimum=4, maximum=4096, step=4, label='max_tokens', value=2048)
         with gr.Row():
-            top_p = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label='Top P', value=0.7)
-        with gr.Row():
-            temperature = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label='Temperature', value=0.95)
+            top_p = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label='top_p', value=0.7)
+            temperature = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label='temperature', value=0.95)
 
         # with gr.Row():
         #     max_rounds = gr.Slider(minimum=1, maximum=50, step=1, label="最大对话轮数（调小可以显著改善爆显存，但是会丢失上下文）", value=20)
-    return [max_length, top_p, temperature]
+    return [max_tokens, top_p, temperature]
