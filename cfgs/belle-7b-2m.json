@@ -7,5 +7,6 @@
             "css": "belle.BELLE_CSS",
             "builder": "belle.belle_ui"
         }
-    }
+    },
+    "support_stream": false
 }

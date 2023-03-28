@@ -37,7 +37,7 @@ class ChatGPTModel(Model):
     def delete(self):
         pass
 
-    def forward(self, top_p, temperature, **kwargs):
+    def generate(self, top_p, temperature, **kwargs):
         query = sym_tbl().history.storage[-1]["query"]
         if len(query["mm_type"]) != 0:
             logger.warning(f"{self.__class__.__name__} is a text-only model, but got mm query. The media is ignored and only the text is used.")

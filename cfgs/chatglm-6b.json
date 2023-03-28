@@ -8,5 +8,6 @@
             "css": "chatglm.CHATGLM_CSS",
             "builder": "chatglm.chatglm_ui"
         }
-    }
+    },
+    "support_stream": true
 }

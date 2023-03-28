@@ -5,8 +5,9 @@
         "model": "llama.LlamaHFModel",
         "history": "llama.LlamaHFHistory",
         "ui": {
-            "css": "llama.LLAMAHF_CSS",
-            "builder": "llama.llamahf_ui"
+            "css": "llama.LLAMA_HF_CSS",
+            "builder": "llama.llama_hf_ui"
         }
-    }
+    },
+    "support_stream": false
 }

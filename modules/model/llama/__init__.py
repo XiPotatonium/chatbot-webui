@@ -49,7 +49,7 @@ class LlamaHFModel(Model):
         del self.tokenizer
         empty_cache()
 
-    def forward(self, max_tokens, top_p, top_k, temperature, beams, **kwargs):
+    def generate(self, max_tokens, top_p, top_k, temperature, beams, **kwargs):
         def generate_prompt(instruction, input=None):
             if input:
                 return f"""Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.

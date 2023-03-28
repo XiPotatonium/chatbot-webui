@@ -6,9 +6,11 @@ class Model:
     def load(cls):
         pass
 
-    @abstractmethod
-    def forward(self, **kwargs):
-        pass
+    def generate(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    def stream_generate(self, *args, **kwargs):
+        raise NotImplementedError()
 
     @abstractmethod
     def delete(self):

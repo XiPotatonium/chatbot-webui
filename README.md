@@ -11,6 +11,7 @@ TODO:
 
 * A multimodal chat model
 * ChatGPT
+* 修改成generate和stream generate，并且在config中设置是否allow stream
 
 
 ## Usage

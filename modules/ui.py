@@ -44,7 +44,12 @@ def send(instruction: str, msg: str, mm_ty, img, audio, video):
 
 
 def predict(*args, **kwargs):
-    return sym_tbl().model.forward(*args, **kwargs)
+    if sym_tbl().cfg.get("support_stream", False):
+        for _ in sym_tbl().model.stream_generate(*args, **kwargs):
+            yield sym_tbl().history.binding
+    else:
+        sym_tbl().model.generate(*args, **kwargs)
+        yield sym_tbl().history.binding
 
 
 def lst_chats() -> List[str]:
@@ -136,10 +141,8 @@ def create_ui():
             fn=lambda: gr.update(interactive=False), outputs=[submit]
         ).then(
             # predict
-            fn=predict, inputs=cfgs
-        ).then(
             # update chatbot with output text
-            fn=lambda: sym_tbl().history.binding, outputs=[chatbot]
+            fn=predict, inputs=cfgs, outputs=[chatbot]
         ).then(
             # flush chats to dir
             fn=lambda: sym_tbl().history.flush_last_rounds()

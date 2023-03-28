@@ -130,6 +130,13 @@ class History:
         if len(info["text"]) != 0:
             self.binding.append((None, info["text"]))
 
+    def update_last_response_binding(self, include_mm: bool = False):
+        info = self.storage[-1]["response"]
+        if len(info["mm_type"]) != 0 and include_mm:
+            self.binding[-2] = (None, (self.folder / info["mm_path"],))
+        if len(info["text"]) != 0:
+            self.binding[-1] = (None, info["text"])
+
 
 def parse_codeblock(text):
     lines = text.split("\n")

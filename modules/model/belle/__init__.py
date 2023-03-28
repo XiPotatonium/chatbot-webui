@@ -43,7 +43,7 @@ class BelleModel(Model):
         del self.tokenizer
         empty_cache()
 
-    def forward(
+    def generate(
             self,
             max_tokens=200,
             do_sample=True,

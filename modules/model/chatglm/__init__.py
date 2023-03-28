@@ -50,7 +50,7 @@ class ChatGLMModel(Model):
         del self.tokenizer
         empty_cache()
 
-    def forward(self, max_tokens, top_p, temperature, **kwargs):
+    def generate(self, max_tokens, top_p, temperature, **kwargs):
         query = sym_tbl().history.storage[-1]["query"]
         if len(query["mm_type"]) != 0:
             logger.warning(f"{self.__class__.__name__} is a text-only model, but got mm query. The media is ignored and only the text is used.")
@@ -64,11 +64,35 @@ class ChatGLMModel(Model):
             top_p=top_p,
             temperature=temperature
         )
-        empty_cache()
         sym_tbl().history.storage[-1]["response"]["text"] = output
         sym_tbl().history.append_last_inference()
         sym_tbl().history.append_last_response_binding()
         # logger.debug(sym_tbl().history.storage[-1])
+        empty_cache()
+
+    def stream_generate(self, max_tokens, top_p, temperature, **kwargs):
+        query = sym_tbl().history.storage[-1]["query"]
+        if len(query["mm_type"]) != 0:
+            logger.warning(f"{self.__class__.__name__} is a text-only model, but got mm query. The media is ignored and only the text is used.")
+        if len(query["instruction"]) != 0:
+            logger.warning(f"{self.__class__.__name__} do not support instruction. It will be ignored")
+        tquery = query["text"]
+
+        for i, (output, _) in enumerate(self.model.stream_chat(
+            self.tokenizer, query=tquery, history=sym_tbl().history.inference,
+            max_length=max_tokens,
+            top_p=top_p,
+            temperature=temperature
+        )):
+            sym_tbl().history.storage[-1]["response"]["text"] = output
+            if i == 0:
+                sym_tbl().history.append_last_response_binding()
+            else:
+                sym_tbl().history.update_last_response_binding()
+            yield       # yield to indicate that stream update has finished
+        sym_tbl().history.append_last_inference()
+        # logger.debug(sym_tbl().history.storage[-1])
+        empty_cache()
 
 
 CHATGLM_CSS = """
