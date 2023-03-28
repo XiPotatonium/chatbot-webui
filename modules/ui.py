@@ -53,7 +53,10 @@ def predict(*args, **kwargs):
 
 
 def lst_chats() -> List[str]:
-    return [f.name for f in Path(sym_tbl().cfg["history_dir"]).iterdir() if f.is_dir()]
+    if sym_tbl().cfg["history"]:
+        return [f.name for f in Path(sym_tbl().cfg["history_dir"]).iterdir() if f.is_dir()]
+    else:
+        return []
 
 
 def refresh_chats():
@@ -121,7 +124,7 @@ def create_ui():
 
         btn_new_chat.click(
             # new chat
-            fn=lambda : sym_tbl().proto.history.new(), outputs=[chatbot]
+            fn=lambda: sym_tbl().proto.history.new(), outputs=[chatbot]
         ).then(
             # select none
             fn=lambda: "", outputs=[dp_chats]

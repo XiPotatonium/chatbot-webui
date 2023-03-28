@@ -1,11 +1,23 @@
 from abc import abstractmethod
 import json
 from pathlib import Path
+import shutil
+import tempfile
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from loguru import logger
 from .sym import sym_tbl
 from datetime import datetime
+import atexit
+
+
+def cleanup_tmpdir():
+    if sym_tbl().history is not None and not sym_tbl().cfg["history"]:
+        shutil.rmtree(sym_tbl().history.folder)
+        if sym_tbl().history.folder.exists():
+            raise SystemError("Failed to remove tmpdir")
+
+atexit.register(cleanup_tmpdir)
 
 
 class History:
@@ -29,12 +41,17 @@ class History:
     @classmethod
     def new(cls):
         timestamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        use_temp = not sym_tbl().cfg["history"]
+        if use_temp:
+            folder = Path(tempfile.mkdtemp())
+        else:
+            folder = Path(sym_tbl().cfg["history_dir"]) / timestamp
         history = cls(
             id=timestamp,
-            folder=Path(sym_tbl().cfg["history_dir"]) / timestamp,
+            folder=folder,
             meta=sym_tbl().cfg
         )
-
+        cleanup_tmpdir()
         sym_tbl().history = history
 
     @classmethod
@@ -127,7 +144,11 @@ class History:
         info = self.storage[-1]["response"]
         if len(info["mm_type"]) != 0:
             self.binding.append((None, (self.folder / info["mm_path"],)))
-        if len(info["text"]) != 0:
+            # if has mm, only create a new text response if not empty
+            if len(info["text"]) != 0:
+                self.binding.append((None, info["text"]))
+        else:
+            # if no mm, force create a new text response
             self.binding.append((None, info["text"]))
 
     def update_last_response_binding(self, include_mm: bool = False):

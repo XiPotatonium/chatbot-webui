@@ -16,19 +16,22 @@ app = typer.Typer()
 
 @app.command()
 def main(
-    cfg: str,
-    device: Optional[List[int]] = None,
-    listen: bool = True,
-    port: int = 7860,
-    share: bool = False,
-    debug: bool = False,
-    load_model: bool = True,
+    cfg: str = typer.Argument(..., help="config path"),
+    device: Optional[List[int]] = typer.Option(None, help="Visible device list. If set as -1, will only use cpu."),
+    listen: bool = typer.Option(True, help="Used in gradio.launch()"),
+    port: int = typer.Option(7860, help="Used in gradio.launch()"),
+    share: bool = typer.Option(False, help="Used in gradio.launch()"),
+    debug: bool = typer.Option(False, help="Debug mode. Will change log level."),
+    load_model: bool = typer.Option(True, help="Load model or not. Useful in debugging ui."),
+    history: bool = typer.Option(True, help="Save history to history dir or not. If no, will use a tmpdir."),
 ):
     # config logger
     logger.remove()  # remove default stdout logger
     logger.add(
         RichHandler(markup=True, console=sym_tbl().console),
         level="DEBUG" if debug else "INFO",
+        # rich handler已经自带了时间、level和代码所在行
+        format="{message}",
     )
 
     # setup dir if not exists
@@ -44,6 +47,7 @@ def main(
         "share": share,
         "debug": debug,
         "load_model": load_model,
+        "history": history,
     })
     sym_tbl().cfg.update(pycfg)
 
