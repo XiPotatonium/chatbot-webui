@@ -3,160 +3,172 @@ import json
 from pathlib import Path
 import shutil
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from loguru import logger
 from .sym import sym_tbl
+from .state import State
 from datetime import datetime
-import atexit
 
 
-def cleanup_tmpdir():
-    if sym_tbl().history is not None and not sym_tbl().cfg["history"]:
-        shutil.rmtree(sym_tbl().history.folder)
-        if sym_tbl().history.folder.exists():
-            raise SystemError("Failed to remove tmpdir")
+def append_query_binding(state: State, binding: List, text: str, mm_type: str = "", mm_path: str = ""):
+    if len(mm_type) != 0:
+        binding.append(((state.folder / mm_path, mm_type), None))
+        # if has mm, only create a new text response if not empty
+        if len(text) != 0:
+            binding.append((text, None))
+    else:
+        # if no mm, force create a new text response
+        binding.append((text, None))
+    return binding
 
-atexit.register(cleanup_tmpdir)
+
+def append_response_binding(state: State, binding: List, text: str, mm_type: str = "", mm_path: str = ""):
+    if len(mm_type) != 0:
+        binding.append((None, (state.folder / mm_path, mm_type)))
+        # if has mm, only create a new text response if not empty
+        if len(text) != 0:
+            binding.append((None, text))
+    else:
+        # if no mm, force create a new text response
+        binding.append((None, text))
+    return binding
 
 
-class History:
-    @staticmethod
-    def storage_meta():
-        return {
-            "query": {
-                "instruction": "",
-                "text": "",
-                "mm_type": "",          # Image/Video/Audio
-                "mm_path": "",
-            },
-            "response": {
-                "text": "",
-                "mm_type": "",
-                "mm_path": "",
-            },
-            # You may add extra field in 2storage
-        }
+def update_response_binding(state: State, binding: List, text: str, mm_type: str = "", mm_path: str = ""):
+    if len(mm_type) != 0:
+        binding[-2] = (None, (state.folder / mm_path, mm_type))
+    if len(text) != 0:
+        binding[-1] = (None, text)
+    return binding
 
-    @classmethod
-    def new(cls):
+
+def iter_binding(binding: List) -> Iterator[Dict[str, Any]]:
+    """Iterate binding and yield in dict format, can be used in store or in infernce (as history)
+
+    Args:
+        binding (List): _description_
+
+    Yields:
+        Iterator[Dict[str, Any]]: _description_
+    """
+    if len(binding) == 0:
+        return
+    info = storage_meta()
+    for (q, r) in binding:
+        if q is not None:
+            if len(info["response"]["text"]) != 0 or len(info["response"]["mm_type"]) != 0:
+                yield info
+                info = storage_meta()
+
+            if isinstance(q, str):
+                # text-only query
+                info["query"]["text"] = q
+            else:
+                # mm query
+                info["query"]["mm_path"] = q["name"]
+                info["query"]["mm_type"] = q["alt_txt"]
+        if r is not None:
+            if isinstance(r, str):
+                info["response"]["text"] = r
+            else:
+                info["response"]["mm_path"] = r["name"]
+                info["response"]["mm_type"] = r["alt_text"]
+    yield info
+
+
+def load_history(state: State, path: str) -> List:
+    """load history from storage to binding
+
+    Args:
+        state (State): _description_
+        path (str): only dirname, assumed in history_dir
+
+    Returns:
+        List: _description_
+    """
+    path = Path(sym_tbl().cfg["history_dir"]) / path
+    state.folder = path         # update folder
+    binding = []
+    state.history = []
+    with (path / "history.jsonl").open('r', encoding="utf8") as rf:
+        for line in rf:
+            info = json.loads(line)
+            state.history.append(info)
+            if len(info["query"]["instruction"]) != 0:
+                append_query_binding(state, binding, "[INSTRUCTION] {}".format(info["query"]["instruction"]))
+            append_query_binding(state, binding, info["query"]["text"], info["query"]["mm_type"], info["query"]["mm_path"])
+            append_response_binding(state, binding, info["response"]["text"], info["response"]["mm_type"], info["response"]["mm_path"])
+    return binding
+
+
+
+def save_mm(src_folder: Path, save_folder: Path, fname: str) -> str:
+    # do not move if already here
+    if len(fname) == 0 or src_folder == save_folder:
+        return fname
+    shutil.move(src_folder / fname, save_folder / fname)
+
+
+def save_history(state: State, path: Optional[str] = None) -> str:
+    """store history from binding to storage. Always create new history dir.
+
+    Args:
+        state (State): _description_
+        path (Optional[str]): save dir (only name, assumed in history_dir). Create new if not exists. If None, create with timestamp.
+
+    Returns:
+        str: only dirname, in history_dir
+    """
+    if path is None:
         timestamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        use_temp = not sym_tbl().cfg["history"]
-        if use_temp:
-            folder = Path(tempfile.mkdtemp())
-        else:
-            folder = Path(sym_tbl().cfg["history_dir"]) / timestamp
-        history = cls(
-            id=timestamp,
-            folder=folder,
-            meta=sym_tbl().cfg
-        )
-        cleanup_tmpdir()
-        sym_tbl().history = history
+        path: Path = Path(sym_tbl().cfg["history_dir"]) / timestamp
+    else:
+        path: Path = Path(sym_tbl().cfg["history_dir"]) / path
+    path.mkdir(exist_ok=True, parents=True)
 
-    @classmethod
-    def load(cls, folder: Path):
-        with (folder / "meta.json").open('r', encoding="utf8") as rf:
-            meta = json.load(rf)
-        history = cls(folder.name, folder, meta)
-        with (folder / "history.jsonl").open('r', encoding="utf8") as rf:
-            for line in rf:
-                history.storage.append(json.loads(line))
-                history.append_last_inference()
-                history.append_last_query_binding()
-                history.append_last_response_binding()
+    with (path / "history.jsonl").open('w', encoding="utf8") as wf:
+        for info in state.history:
+            save_mm(state.folder, path, info["query"]["mm_path"])
+            save_mm(state.folder, path, info["response"]["mm_path"])
+            wf.write(json.dumps(info, ensure_ascii=False) + "\n")
 
-        sym_tbl().history = history
+    state.folder = path         # update folder
+    return path.name
 
-    def __init__(
-            self,
-            id: str,
-            folder: Path,
-            meta: Dict[str, Any],
-        ):
-        self.folder = folder
-        self.id = id
-        self.binding: List[Tuple[Union[str, None, Tuple], Union[str, None, Tuple]]] = []           # Used in chatbot for rendering
-        self.inference = []         # Used in model inference
-        self.storage: List[Dict[str, Any]] = []
-        self.meta = meta
 
-    def save(self):
-        self.folder.mkdir(parents=True)
-        with (self.folder / "meta.json").open('w', encoding="utf8") as wf:
-            json.dump(self.meta, wf, ensure_ascii=False)
-        with (self.folder / "history.jsonl").open('w', encoding="utf8") as wf:
-            for s_item in self.storage:
-                wf.write(json.dumps(s_item, ensure_ascii=False))
-                wf.write("\n")
+def sync_last_history(state: State, path: str):
+    """sync last history to storage
 
-    def flush_last_rounds(self, pos: int = -1):
-        # logger.debug(sym_tbl().history.storage[-1])
-        with (self.folder / "history.jsonl").open('a', encoding="utf8") as wf:
-            for s_item in self.storage[pos:]:
-                wf.write(json.dumps(s_item, ensure_ascii=False))
-                wf.write("\n")
+    Args:
+        state (State): _description_
+        path (str): save dir (only name, assumed in history_dir).
+    """
+    if path is None or len(path) == 0:
+        return
+    path: Path = Path(sym_tbl().cfg["history_dir"]) / path
+    assert state.folder == path, f"sync_last_history: state.folder ({state.folder}) != {path}"
+    with (path / "history.jsonl").open('a', encoding="utf8") as wf:
+        info = state.history[-1]
+        # save_mm(state.folder, path, info["query"]["mm_path"])
+        # save_mm(state.folder, path, info["response"]["mm_path"])
+        wf.write(json.dumps(info, ensure_ascii=False) + "\n")
 
-    def save_media(self, media) -> Path:
-        from PIL import Image
-        def next_mm_id(path: Path):
-            res = -1
-            for f in path.iterdir():
-                if f.suffix in {".png"}:
-                    try:
-                        res = max(res, int(f.stem))
-                    except ValueError:
-                        pass
-            return res + 1
-        if isinstance(media, Image.Image):
-            mm_path = self.folder / f"{next_mm_id(self.folder)}.png"
-            media.save(mm_path, "PNG")
-        else:
-            raise ValueError(f"Unknown media type: {type(media)}")
-        return mm_path
 
-    @abstractmethod
-    def append_inference(self, item: Dict[str, Any]):
-        """Used in loading history from file
-
-        Args:
-            item (Dict[str, Any]): _description_
-        """
-        pass
-
-    def append_last_inference(self):
-        self.append_inference(self.storage[-1])
-
-    def append_last_query_binding(self):
-        if (
-            (len(self.storage) > 1 and self.storage[-1]["query"]["instruction"] != self.storage[-2]["query"]["instruction"]) or
-            (len(self.storage) == 1 and len(self.storage[-1]["query"]["instruction"]) != 0)
-        ):
-            self.binding.append((f"[INSTRUCTION]: {self.storage[-1]['query']['instruction']}", None))
-
-        info = self.storage[-1]["query"]
-        if len(info["mm_type"]) != 0:
-            self.binding.append(((self.folder / info["mm_path"], ), None))
-        if len(info["text"]) != 0:
-            self.binding.append((info["text"], None))
-
-    def append_last_response_binding(self):
-        info = self.storage[-1]["response"]
-        if len(info["mm_type"]) != 0:
-            self.binding.append((None, (self.folder / info["mm_path"],)))
-            # if has mm, only create a new text response if not empty
-            if len(info["text"]) != 0:
-                self.binding.append((None, info["text"]))
-        else:
-            # if no mm, force create a new text response
-            self.binding.append((None, info["text"]))
-
-    def update_last_response_binding(self, include_mm: bool = False):
-        info = self.storage[-1]["response"]
-        if len(info["mm_type"]) != 0 and include_mm:
-            self.binding[-2] = (None, (self.folder / info["mm_path"],))
-        if len(info["text"]) != 0:
-            self.binding[-1] = (None, info["text"])
+def storage_meta():
+    return {
+        "query": {
+            "instruction": "",
+            "text": "",
+            "mm_type": "",          # Image/Video/Audio
+            "mm_path": "",
+        },
+        "response": {
+            "text": "",
+            "mm_type": "",
+            "mm_path": "",
+        },
+    }
 
 
 def parse_codeblock(text):

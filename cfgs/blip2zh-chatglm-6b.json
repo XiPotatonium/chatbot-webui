@@ -4,7 +4,6 @@
     "prec": "fp16",
     "proto": {
         "model": "blip2chatglm.Blip2ChatGLMModel",
-        "history": "blip2chatglm.Blip2ChatGLMHistory",
         "ui": {
             "css": "blip2chatglm.BLIP2CHATGLM_CSS",
             "builder": "blip2chatglm.blip2chatglm_ui"

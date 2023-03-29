@@ -3,14 +3,16 @@ from typing import List, Optional
 import gradio as gr
 from loguru import logger
 from .sym import sym_tbl
+from .state import State
+from .history import load_history, save_history, append_query_binding, sync_last_history
 
 
 _css = """
-#icon-btn {
+#emoji-btn {
     max-width: 2.5em;
     min-width: 2.5em !important;
     height: 2.5em;
-    margin: 1.5em 0;
+    margin: 0.15em 0;
 }
 """
 
@@ -20,51 +22,60 @@ _css = """
 # }
 
 
-def send(instruction: str, msg: str, mm_ty, img, audio, video):
-    if not sym_tbl().history.folder.exists():
-        # lazy create dir
-        sym_tbl().history.save()
-
-    new_storage = sym_tbl().history.storage_meta()
-    new_storage["query"]["text"] = msg if msg is not None else ""
-    new_storage["query"]["instruction"] = instruction if instruction is not None else ""
+def send(state: State, binding, msg: str, instruction: str, mm_ty: str, img, audio, video):
+    msg = msg if msg is not None else ""
+    instruction = instruction if instruction is not None else ""
     if (
         (mm_ty == "Image" and img is not None) or
         (mm_ty == "Audio" and audio is not None) or
         (mm_ty == "Video" and video is not None)
     ):
-        new_storage["query"]["mm_type"] = mm_ty
-        new_storage["query"]["mm_path"] = sym_tbl().history.save_media(img).name
-    sym_tbl().history.storage.append(new_storage)
-    sym_tbl().history.append_last_query_binding()
+        mm_type = mm_ty
 
-    # logger.debug(new_storage)
+        from PIL import Image
+        import uuid
+        if isinstance(img, Image.Image):
+            mm_path = state.folder / f"{uuid.uuid4()}.png"
+            if mm_path.exists():
+                raise FileExistsError(f"File {mm_path} already exists. WTF?")
+            img.save(mm_path, "PNG")
+        else:
+            raise NotImplementedError()
 
-    return sym_tbl().history.binding
+        mm_path = mm_path.name         # may be serialized to json, convert to string format
+    else:
+        mm_type = ""
+        mm_path = ""
+    state.append_history_meta()
+    state.history[-1]["query"]["text"] = msg
+    state.history[-1]["query"]["instruction"] = instruction
+    state.history[-1]["query"]["mm_type"] = mm_type
+    state.history[-1]["query"]["mm_path"] = mm_path
+    if len(instruction) != 0:
+        append_query_binding(state, binding, f"[INSTRUCTION] {instruction}")
+    return append_query_binding(state, binding, msg, mm_type, mm_path)
 
 
 def predict(*args, **kwargs):
     if sym_tbl().cfg.get("support_stream", False):
-        for _ in sym_tbl().model.stream_generate(*args, **kwargs):
-            yield sym_tbl().history.binding
+        for binding in sym_tbl().model.stream_generate(*args, **kwargs):
+            yield binding
     else:
-        sym_tbl().model.generate(*args, **kwargs)
-        yield sym_tbl().history.binding
+        binding = sym_tbl().model.generate(*args, **kwargs)
+        yield binding
 
 
 def lst_chats() -> List[str]:
-    if sym_tbl().cfg["history"]:
-        return [f.name for f in Path(sym_tbl().cfg["history_dir"]).iterdir() if f.is_dir()]
-    else:
-        return []
+    return [f.name for f in Path(sym_tbl().cfg["history_dir"]).iterdir() if f.is_dir()]
 
 
-def refresh_chats():
-    return gr.update(choices=lst_chats())
+def refresh_chats(current: str):
+    return gr.update(choices=lst_chats(), value=current)
 
 
 def create_ui():
-    with gr.Blocks(css=_css + sym_tbl().proto.ui.css) as ui:
+    with gr.Blocks(css=_css + sym_tbl().proto.ui.css, title="chatbot-webui") as ui:
+        state = gr.State(value=State(folder=sym_tbl().tmp_dir))
         with gr.Row():
             with gr.Column(scale=7, elem_id="chatpanel"):
                 chatbot = gr.Chatbot(elem_id="chatbot", show_label=False).style(height=700)
@@ -73,21 +84,22 @@ def create_ui():
                 with gr.Row():
                     with gr.Column(variant="panel"):
                         with gr.Row():
-                            dp_chats = gr.Dropdown(show_label=False, choices=lst_chats())
-                            btn_refresh_chats = gr.Button("♻", elem_id="icon-btn")
+                            dp_chats = gr.Dropdown(
+                                show_label=False, choices=lst_chats(), interactive=sym_tbl().cfg["history"],
+                            ).style(container=False)
+                            btn_refresh_chats = gr.Button("♻", elem_id="emoji-btn")
                         with gr.Row():
-                            btn_new_chat = gr.Button("New Chat")
+                            btn_new_chat = gr.Button("New")
+                            btn_save_chat = gr.Button("Save", interactive=sym_tbl().cfg["history"])
 
                 with gr.Row():
                     with gr.Column(variant="panel"):
                         with gr.Accordion("Instruction", open=False):
                             instruction = gr.Textbox(lines=2, placeholder="Your instruction here...", show_label=False).style(container=False)
                         with gr.Row():
-                            msg = gr.Textbox(label="Input", placeholder="Type your text...", show_label=False, lines=2).style(container=False)
-                        with gr.Row():
-                            with gr.Accordion("Media", open=False):
+                            with gr.Accordion(label="Media", open=False):
                                 with gr.Row():
-                                    dp_mm = gr.Dropdown(["Image", "Audio", "Video"], label="Use", show_label=True)
+                                    radio_mm = gr.Radio(["Image", "Audio", "Video"], show_label=False).style(item_container=False)
                                 with gr.Row():
                                     with gr.Tab("Image"):
                                         img = gr.Image(label=False, type="pil")
@@ -96,62 +108,55 @@ def create_ui():
                                     with gr.Tab("Video"):
                                         video = gr.Video(label=False, interactive=False)
                         with gr.Row():
-                            submit = gr.Button("Send")
+                            msg = gr.Textbox(
+                                label="Input",
+                                placeholder="Type your text... (Press Enter for new line, Shift+Enter for sending)",
+                                show_label=False, lines=3
+                            ).style(container=False)
                 with gr.Row():
                     # model specific configuration ui
                     cfgs = sym_tbl().proto.ui.builder()
 
         dp_chats.select(
             # load history
-            fn=lambda x: sym_tbl().proto.history.load(Path(sym_tbl().cfg["history_dir"]) / x),
-            inputs=[dp_chats]
-        ).then(
             # update chatbot
-            fn=lambda: sym_tbl().history.binding, outputs=[chatbot]
-        ).then(
-            # update instruction
-            fn=lambda: "" if len(sym_tbl().history.storage) == 0 else sym_tbl().history.storage[-1]["query"]["instruction"],
-            outputs=[instruction]
+            fn=load_history,
+            inputs=[state, dp_chats], outputs=[chatbot]
         )
+
         btn_refresh_chats.click(
             # refresh chatlist
-            fn=refresh_chats, outputs=[dp_chats]
-        ).then(
-            # select current
-            fn=lambda: sym_tbl().history.folder.name if sym_tbl().history.folder.exists() else "",
-            outputs=[dp_chats]
+            fn=refresh_chats, inputs=[dp_chats], outputs=[dp_chats]
         )
 
         btn_new_chat.click(
             # new chat
-            fn=lambda: sym_tbl().proto.history.new(), outputs=[chatbot]
-        ).then(
             # select none
-            fn=lambda: "", outputs=[dp_chats]
+            fn=lambda: (State(folder=sym_tbl().tmp_dir), [], ""), outputs=[state, chatbot, dp_chats]
         )
 
-        submit.click(
-            # update chatbot with input text, mkdir if new chat
-            fn=send, inputs=[instruction, msg, dp_mm, img, audio, video], outputs=[chatbot]
+        btn_save_chat.click(
+            # save history
+            fn=lambda s: save_history(s), inputs=[state], outputs=[dp_chats],
         ).then(
-            # select current
-            fn=lambda: sym_tbl().history.folder.name, outputs=[dp_chats]
+            # refresh chatlist
+            fn=refresh_chats, inputs=[dp_chats], outputs=[dp_chats]
+        )
+
+        msg.submit(
+            # update chatbot with input text, mkdir if new chat
+            fn=send, inputs=[state, chatbot, msg, instruction, radio_mm, img, audio, video], outputs=[chatbot],
+            queue=False,
         ).then(
             # clear textbox and mm
-            fn=lambda: (None, None, None, None), outputs=[msg, img, audio, video]
-        ).then(
-            # disable button
-            fn=lambda: gr.update(interactive=False), outputs=[submit]
+            fn=lambda: (None, None), outputs=[msg, radio_mm]
         ).then(
             # predict
             # update chatbot with output text
-            fn=predict, inputs=cfgs, outputs=[chatbot]
+            fn=predict, inputs=[state, chatbot] + cfgs, outputs=[chatbot]
         ).then(
-            # flush chats to dir
-            fn=lambda: sym_tbl().history.flush_last_rounds()
-        ).then(
-            # enable button
-            fn=lambda: gr.update(interactive=True), outputs=[submit]
+            # sync last chat to history
+            fn=lambda s, f: sync_last_history(s, f) if f is not None and len(f) != 0 else None, inputs=[state, dp_chats]
         )
 
     return ui

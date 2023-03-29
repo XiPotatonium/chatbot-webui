@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import tempfile
 from typing import Any, Dict, List, Optional
 from loguru import logger
 from rich.logging import RichHandler
@@ -36,10 +37,9 @@ def main(
 
     # setup dir if not exists
     Path(sym_tbl().cfg["history_dir"]).mkdir(parents=True, exist_ok=True)
+    Path(sym_tbl().cfg["tmp_dir"]).mkdir(parents=True, exist_ok=True)
 
-    with Path(cfg).open('r', encoding="utf8") as rf:
-        pycfg: Dict[str, Any] = json.load(rf)
-    pycfg.update({
+    console_args = {
         "cfg": cfg,
         "device": device,
         "listen": listen,
@@ -48,24 +48,30 @@ def main(
         "debug": debug,
         "load_model": load_model,
         "history": history,
-    })
-    sym_tbl().cfg.update(pycfg)
+    }
 
-    sym_tbl().device_info = alloc1([] if device is None else device)
-    sym_tbl().device = torch.device(sym_tbl().device_info["device"])
+    with tempfile.TemporaryDirectory(dir=sym_tbl().cfg["tmp_dir"]) as f:
+        sym_tbl().tmp_dir = Path(f)
 
-    update_proto()
-    sym_tbl().proto.history.new()
-    if load_model:
-        sym_tbl().proto.model.load()
+        with Path(cfg).open('r', encoding="utf8") as rf:
+            file_args: Dict[str, Any] = json.load(rf)
+        sym_tbl().cfg.update(file_args)
+        sym_tbl().cfg.update(console_args)
 
-    with torch.no_grad():
+        update_proto()
+        if sym_tbl().cfg["load_model"]:
+            sym_tbl().device_info = alloc1([] if sym_tbl().cfg["device"] is None else sym_tbl().cfg["device"])
+            sym_tbl().device = torch.device(sym_tbl().device_info["device"])
+            sym_tbl().proto.model.load()
+
         ui = create_ui()
         ui.queue().launch(
             server_name="0.0.0.0" if listen else None,
             server_port=port,
-            share=share
+            share=share,
+            # prevent_thread_lock=True,
         )
+        ui.close()
 
 
 if __name__ == "__main__":

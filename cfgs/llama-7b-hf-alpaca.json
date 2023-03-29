@@ -3,7 +3,6 @@
     "lora_path": "models/lora/alpaca-lora-7b",
     "proto": {
         "model": "llama.LlamaHFModel",
-        "history": "llama.LlamaHFHistory",
         "ui": {
             "css": "llama.LLAMA_HF_CSS",
             "builder": "llama.llama_hf_ui"

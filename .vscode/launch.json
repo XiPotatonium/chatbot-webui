@@ -21,7 +21,7 @@
       "console": "integratedTerminal",
       "justMyCode": false,
       "args": [
-        "--debug"
+        "cfgs/blip2zh-chatglm-6b.json", "--no-history"
       ]
     }
   ]

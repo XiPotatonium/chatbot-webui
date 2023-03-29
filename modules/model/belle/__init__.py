@@ -1,20 +1,14 @@
 import sys
 from loguru import logger
 from ...sym import sym_tbl
+from ...state import State
 from ...device import empty_cache
+from ...history import append_response_binding, update_response_binding
 from .. import Model
-from ...history import History
-from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
-from typing import Any, Dict, Tuple, Union
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig, PreTrainedTokenizer, BloomForCausalLM
+from typing import Any, Dict, Tuple, Union, List
 import torch
 import gradio as gr
-
-
-class BelleHistory(History):
-    def append_inference(self, item: Dict[str, Any]):
-        # belle has not history
-        # self.inference.append((item["query"]['text'], item["response"]['text']))
-        pass
 
 
 class BelleModel(Model):
@@ -34,17 +28,18 @@ class BelleModel(Model):
             model = torch.compile(model)
         sym_tbl().model = cls(tokenizer, model)
 
-    def __init__(self, tokenizer, model) -> None:
+    def __init__(self, tokenizer: PreTrainedTokenizer, model: BloomForCausalLM) -> None:
         self.tokenizer = tokenizer
         self.model = model
 
     def delete(self):
         del self.model
-        del self.tokenizer
         empty_cache()
 
     def generate(
             self,
+            state: State,
+            binding: List,
             max_tokens=200,
             do_sample=True,
             top_p=0.85,
@@ -53,15 +48,29 @@ class BelleModel(Model):
             repetition_penalty=1.2,
             **kwargs
     ):
-        query = sym_tbl().history.storage[-1]["query"]
-        if len(query["mm_type"]) != 0:
-            logger.warning(f"{self.__class__.__name__} is a text-only model, but got mm query. The media is ignored and only the text is used.")
-        if len(query["instruction"]) != 0:
-            logger.warning(f"{self.__class__.__name__} do not support instruction. It will be ignored")
-        tquery = query["text"]
+        history = []
+        for info in state.history:
+            def convert(info: Dict[str, Any]):
+                text = info["text"]
+                mm_type = info["mm_type"]
+                if len(info["mm_type"]) != 0:
+                    logger.warning(
+                        f"{self.__class__.__name__} is a text-only model, but got {mm_type} input."
+                        "The media is ignored and only the text is used."
+                    )
+                return text
+            history.append((convert(info["query"]), convert(info["response"])))
+        query = history.pop()
+        instruction = state.history[-1]["query"]["instruction"]
+        if len(instruction) != 0:
+            logger.warning(f"{self.__class__.__name__} will ignore instruction {instruction}.")
+        query = query[0]
 
-        prompt = 'Human: {}\n\nAssistant:'.format(tquery)
-        # print(f"usr: {prompt}")
+        prompt = ""
+        for q, r in history:
+            prompt += f"Human: {q}\n\nAssistant: {r}\n\n"
+        prompt += 'Human: {}\n\nAssistant:'.format(query)
+
         inputs = self.tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"].to(sym_tbl().device)
         generation_config = GenerationConfig(
@@ -87,9 +96,9 @@ class BelleModel(Model):
         output = output[len(prompt):].strip()
 
         empty_cache()
-        sym_tbl().history.storage[-1]["response"]["text"] = output
-        sym_tbl().history.append_last_inference()
-        sym_tbl().history.append_last_response_binding()
+
+        state.history[-1]["response"]["text"] = output
+        return append_response_binding(state, binding, output)
 
 
 BELLE_CSS = """

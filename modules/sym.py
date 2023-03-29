@@ -1,5 +1,6 @@
 # __future__.annotations will become the default in Python 3.11
 from __future__ import annotations
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping, Optional, Type
 import torch
 from rich.console import Console
@@ -23,6 +24,7 @@ class NoFrame(RuntimeError):
 DEFAULT_CFG = {
     "model_base_dir": "models",
     "history_dir": "history",
+    "tmp_dir": "tmp",
 }
 
 
@@ -44,8 +46,8 @@ class SymbolTbl:
         self.device_info: Optional[Dict[str, Any]] = None
         self.device: Optional[torch.device] = None
         self.model: Optional[Model] = None
-        self.history: Optional[History] = None
         self.proto: Optional[Proto] = None
+        self.tmp_dir: Optional[Path] = None
 
     def set(self, key, value):
         """设置当前局部作用域的值

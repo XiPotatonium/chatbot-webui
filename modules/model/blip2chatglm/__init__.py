@@ -2,21 +2,17 @@ import sys
 from loguru import logger
 import torch
 from ...sym import sym_tbl
+from ...state import State
 from ...device import empty_cache
 from .. import Model
-from ...history import History
+from ...history import append_response_binding, update_response_binding
 from transformers import AutoModel, AutoTokenizer, BlipImageProcessor, PreTrainedTokenizer
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 from .modeling_blip2chatglm import Blip2ChatGLM, Blip2ForChatGLM
 from .modeling_chatglm import ChatGLMForConditionalGeneration
 import gradio as gr
 from transformers.utils.constants import OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from PIL import Image
-
-
-class Blip2ChatGLMHistory(History):
-    def append_inference(self, item: Dict[str, Any]):
-        self.inference.append((item["query"]['text'], item["response"]['text']))
 
 
 class Blip2ChatGLMModel(Model):
@@ -59,7 +55,7 @@ class Blip2ChatGLMModel(Model):
             self,
             tokenizer: PreTrainedTokenizer,
             pixel_processor: BlipImageProcessor,
-            model: ChatGLMForConditionalGeneration
+            model: Blip2ChatGLM
         ) -> None:
         self.tokenizer = tokenizer
         self.model = model
@@ -67,38 +63,56 @@ class Blip2ChatGLMModel(Model):
 
     def delete(self):
         del self.model
-        del self.tokenizer
         empty_cache()
 
-    def stream_generate(self, max_tokens, top_p, temperature, **kwargs):
-        query = sym_tbl().history.storage[-1]["query"]
-        mm_type = query["mm_type"]
-        if len(mm_type) != 0 and mm_type != "Image":
-            logger.warning(f"{self.__class__.__name__} is a text-image model, but got {mm_type} query. The media is ignored and only the text is used.")
-        if len(query["instruction"]) != 0:
-            logger.warning(f"{self.__class__.__name__} do not support instruction. It will be ignored")
-        if mm_type == "Image":
-            pixel_values = self.pixel_processor(
-                Image.open(sym_tbl().history.folder / query["mm_path"]).convert("RGB"), return_tensors="pt"
-            ).pixel_values.to(sym_tbl().device)
-            mm_query = (query["text"], pixel_values)
-        else:
-            mm_query = query["text"]
+    def stream_generate(
+            self,
+            state: State,
+            binding: List,
+            max_tokens: int = 2048,
+            top_p: float = 0.7,
+            temperature: float = 0.95,
+            **kwargs
+    ):
+        history = []
+        # DISCUSS: should we add a field to state to store chat history for inference?
+        # PROS: save conversion time
+        # CONS: memory consuming, especially for mm history
+        for info in state.history:
+            def convert(info: Dict[str, Any]):
+                text = info["text"]
+                mm_type = info["mm_type"]
+                if len(info["mm_type"]) != 0:
+                    mm_path = state.folder / info["mm_path"]
+                    if info["mm_type"] == "Image":
+                        pixel_values = self.pixel_processor(
+                            Image.open(mm_path).convert("RGB"), return_tensors="pt"
+                        ).pixel_values.to(sym_tbl().device)
+                        return (text, pixel_values)
+                    else:
+                        logger.warning(
+                            f"{self.__class__.__name__} is a text-image model, but got {mm_type} input."
+                            "The media is ignored and only the text is used."
+                        )
+                return text
+            history.append((convert(info["query"]), convert(info["response"])))
+        query = history.pop()
+        instruction = state.history[-1]["query"]["instruction"]
+        if len(instruction) != 0:
+            logger.warning(f"{self.__class__.__name__} will ignore instruction {instruction}.")
+        query = query[0]
 
         for i, (output, _) in enumerate(self.model.stream_chat(
-            self.tokenizer, query=mm_query, history=sym_tbl().history.inference,
+            self.tokenizer, query=query, history=history,
             max_length=max_tokens,
             top_p=top_p,
             temperature=temperature
         )):
-            sym_tbl().history.storage[-1]["response"]["text"] = output
             if i == 0:
-                sym_tbl().history.append_last_response_binding()
+                yield append_response_binding(state, binding, output)
             else:
-                sym_tbl().history.update_last_response_binding()
-            yield       # yield to indicate that stream update has finished
-        sym_tbl().history.append_last_inference()
-        # logger.debug(sym_tbl().history.storage[-1])
+                yield update_response_binding(state, binding, output)
+        state.history[-1]["response"]["text"] = output
         empty_cache()
 
 
