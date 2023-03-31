@@ -6,11 +6,7 @@ Now support:
 * [chatglm](https://huggingface.co/THUDM/chatglm-6b)
 * [BELLE-7B-2M](https://huggingface.co/BelleGroup/BELLE-7B-2M)
 * [blip2chatglm](https://github.com/XiPotatonium/LAVIS). Currently only training code is provided, we will release pretrained model soon.
-
-
-TODO:
-
-* ChatGPT
+* ChatGPT. You should first acquire your openai API and set your api key at `cfgs/chatgpt.json`
 
 
 ## Usage

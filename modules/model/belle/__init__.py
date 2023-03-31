@@ -5,19 +5,19 @@ from ...state import State
 from ...device import empty_cache
 from ...history import append_response_binding, update_response_binding
 from .. import Model
-from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig, PreTrainedTokenizer, BloomForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig, PreTrainedTokenizer, PreTrainedModel
 from typing import Any, Dict, Tuple, Union, List
 import torch
 import gradio as gr
 
 
-class BelleModel(Model):
+class BelleLlamaModel(Model):
     @classmethod
     def load(cls):
         path = sym_tbl().cfg["model_path"]
-        tokenizer = AutoTokenizer.from_pretrained(path)
+        tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
         model = AutoModelForCausalLM.from_pretrained(
-            path,
+            path, low_cpu_mem_usage=True, trust_remote_code=True,
         )
 
         model.to(sym_tbl().device)
@@ -28,7 +28,7 @@ class BelleModel(Model):
             model = torch.compile(model)
         sym_tbl().model = cls(tokenizer, model)
 
-    def __init__(self, tokenizer: PreTrainedTokenizer, model: BloomForCausalLM) -> None:
+    def __init__(self, tokenizer: PreTrainedTokenizer, model: PreTrainedModel) -> None:
         self.tokenizer = tokenizer
         self.model = model
 
@@ -68,8 +68,8 @@ class BelleModel(Model):
 
         prompt = ""
         for q, r in history:
-            prompt += f"Human: {q}\n\nAssistant: {r}\n\n"
-        prompt += 'Human: {}\n\nAssistant:'.format(query)
+            prompt += f"Human: {q} \n\nAssistant:{r} \n\n"
+        prompt += f'Human: {query} \n\nAssistant:'
 
         inputs = self.tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"].to(sym_tbl().device)
@@ -79,21 +79,21 @@ class BelleModel(Model):
             top_k=top_k,
             do_sample=do_sample,
             repetition_penalty=repetition_penalty,
+            max_new_tokens=max_tokens,
+            eos_token_id=2, bos_token_id=1, pad_token_id=0,
             **kwargs,
         )
-        with torch.no_grad():
-            generation_output = self.model.generate(
-                input_ids=input_ids,
-                generation_config=generation_config,
-                return_dict_in_generate=True,
-                output_scores=True,
-                max_new_tokens=max_tokens,
-            )
-        s = generation_output.sequences[0]
-        output = self.tokenizer.decode(s, skip_special_token=True)
-        # print("bot: {}".format(output.split("### Response:")[1].strip()))
-        # logger.debug(prompt)
-        output = output[len(prompt):].strip()
+        generation_output = self.model.generate(
+            input_ids=input_ids,
+            generation_config=generation_config,
+            # return_dict_in_generate=True,
+            # output_scores=True,
+        )
+        s = generation_output[0]
+        output = self.tokenizer.decode(s, skip_special_token=True, clean_up_tokenization_spaces=False)
+        # logger.debug(output)
+        output = output.strip()[len(prompt):].strip()
+        # logger.debug(output)
 
         empty_cache()
 
@@ -113,9 +113,9 @@ def belle_ui():
             top_k = gr.Slider(minimum=0, maximum=100, step=1, label='top_k', value=30)
         with gr.Row():
             do_sample = gr.Checkbox(label='do_sample', value=True)
-            temperature = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='temperature', value=0.35)
+            temperature = gr.Slider(minimum=0., maximum=1.0, step=0.01, label='temperature', value=0.5)
         with gr.Row():
-            repetition_penalty = gr.Slider(minimum=1, maximum=4, step=0.1, label='repetition_penalty', value=1.2)
+            repetition_penalty = gr.Slider(minimum=1, maximum=4, step=0.1, label='repetition_penalty', value=1.)
 
         # with gr.Row():
         #     max_rounds = gr.Slider(minimum=1, maximum=50, step=1, label="最大对话轮数（调小可以显著改善爆显存，但是会丢失上下文）", value=20)

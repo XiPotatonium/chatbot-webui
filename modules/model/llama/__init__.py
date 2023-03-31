@@ -96,14 +96,13 @@ class LlamaHFModel(Model):
             num_beams=beams,
             **kwargs,
         )
-        with torch.no_grad():
-            generation_output = self.model.generate(
-                input_ids=input_ids,
-                generation_config=generation_config,
-                return_dict_in_generate=True,
-                output_scores=True,
-                max_new_tokens=max_tokens,
-            )
+        generation_output = self.model.generate(
+            input_ids=input_ids,
+            generation_config=generation_config,
+            return_dict_in_generate=True,
+            output_scores=True,
+            max_new_tokens=max_tokens,
+        )
         s = generation_output.sequences[0]
         output = self.tokenizer.decode(s)
         # print("bot: {}".format(output.split("### Response:")[1].strip()))
