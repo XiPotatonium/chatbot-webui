@@ -1,12 +1,6 @@
 {
+    "model": "chatgpt",
     "api_key": "YOUR_API_KEY",
-    "model": "gpt-3.5-turbo",
-    "proto": {
-        "model": "chatgpt.ChatGPTModel",
-        "ui": {
-            "css": "chatgpt.CHATGPT_CSS",
-            "builder": "chatgpt.chatgpt_ui"
-        }
-    },
+    "api_model": "gpt-3.5-turbo",
     "support_stream": true
 }

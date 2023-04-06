@@ -1,13 +1,7 @@
 {
+    "model": "blip2chatglm",
     "model_path": "models/lm/blip2zh-chatglm-6b",
     "lm_path": "models/lm/chatglm-6b",
     "prec": "fp16",
-    "proto": {
-        "model": "blip2chatglm.Blip2ChatGLMModel",
-        "ui": {
-            "css": "blip2chatglm.BLIP2CHATGLM_CSS",
-            "builder": "blip2chatglm.blip2chatglm_ui"
-        }
-    },
     "support_stream": true
 }

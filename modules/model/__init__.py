@@ -1,6 +1,5 @@
 from abc import abstractclassmethod, abstractmethod
 from typing import Iterator, List
-from ..sym import sym_tbl
 from ..state import State
 
 class Model:
@@ -22,7 +21,9 @@ class Model:
         """
         raise NotImplementedError()
 
-    def stream_generate(self, state: State, binding: List, *args, **kwargs) -> Iterator[List]:
+    def stream_generate(
+        self, state: State, binding: List, *args, **kwargs
+    ) -> Iterator[List]:
         """see Model.generate
 
         Args:

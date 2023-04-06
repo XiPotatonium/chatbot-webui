@@ -1,12 +1,6 @@
 {
+    "model": "llama-hf",
     "model_path": "models/lm/llama-7b-hf",
     "lora_path": "models/lora/alpaca-lora-7b",
-    "proto": {
-        "model": "llama.LlamaHFModel",
-        "ui": {
-            "css": "llama.LLAMA_HF_CSS",
-            "builder": "llama.llama_hf_ui"
-        }
-    },
     "support_stream": false
 }

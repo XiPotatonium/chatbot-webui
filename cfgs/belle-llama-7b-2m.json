@@ -1,11 +1,5 @@
 {
+    "model": "belle-llama",
     "model_path": "models/lm/BELLE-LLAMA-7B-2M",
-    "proto": {
-        "model": "belle.BelleLlamaModel",
-        "ui": {
-            "css": "belle.BELLE_CSS",
-            "builder": "belle.belle_ui"
-        }
-    },
     "support_stream": false
 }

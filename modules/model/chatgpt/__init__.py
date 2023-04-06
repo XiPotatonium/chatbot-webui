@@ -14,7 +14,7 @@ class ChatGPTModel(Model):
     @classmethod
     def load(cls):
         api_key = sym_tbl().cfg["api_key"]
-        model = sym_tbl().cfg["model"]
+        model = sym_tbl().cfg["api_model"]
         # openai.organization = "xxx"
         openai.api_key = api_key
         # print(openai.Model.list())
