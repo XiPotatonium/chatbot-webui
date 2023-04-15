@@ -1,6 +1,5 @@
 {
     "model": "chatgpt",
-    "api_key": "YOUR_API_KEY",
     "api_model": "gpt-3.5-turbo",
     "support_stream": true
 }

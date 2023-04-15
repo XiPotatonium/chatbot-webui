@@ -13,17 +13,14 @@ import openai
 class ChatGPTModel(Model):
     @classmethod
     def load(cls):
-        api_key = sym_tbl().cfg["api_key"]
         model = sym_tbl().cfg["api_model"]
         # openai.organization = "xxx"
-        openai.api_key = api_key
         # print(openai.Model.list())
         # TODO: check model in model list
 
-        sym_tbl().model = cls(api_key, model)
+        sym_tbl().model = cls(model)
 
-    def __init__(self, api_key: str, model: str) -> None:
-        self.api_key = api_key
+    def __init__(self, model: str) -> None:
         self.model = model
 
     def delete(self):
@@ -33,10 +30,13 @@ class ChatGPTModel(Model):
             self,
             state: State,
             binding: List,
+            api_key: str,
             top_p: float,
             temperature: float,
             **kwargs
     ):
+        openai.api_key = api_key
+
         history = []
         instruction = state.history[-1]["query"]["instruction"]
         if len(instruction) != 0:
@@ -81,9 +81,10 @@ CHATGPT_CSS = """
 
 def chatgpt_ui():
     with gr.Column(variant="panel"):
+        api_key = gr.Textbox(label="API Key", lines=1, default="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
         top_p = gr.Slider(minimum=0.01, maximum=1.0, step=0.01, label='top_p', value=1.0)
         temperature = gr.Slider(minimum=0.01, maximum=2.0, step=0.01, label='temperature', value=1.0)
 
         # with gr.Row():
         #     max_rounds = gr.Slider(minimum=1, maximum=50, step=1, label="最大对话轮数（调小可以显著改善爆显存，但是会丢失上下文）", value=20)
-    return [top_p, temperature]
+    return [api_key, top_p, temperature]

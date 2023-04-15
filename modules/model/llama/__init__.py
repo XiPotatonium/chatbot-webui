@@ -29,9 +29,9 @@ class LlamaHFModel(Model):
         model.half()
         model.to(sym_tbl().device)
         model.eval()
-        if torch.__version__ >= "2" and sys.platform != "win32":
-            logger.info("Use torch.compile")
-            model = torch.compile(model)
+        # if torch.__version__ >= "2" and sys.platform != "win32":
+        #     logger.info("Use torch.compile")
+        #     model = torch.compile(model)
         sym_tbl().model = cls(tokenizer, model)
 
     def __init__(self, tokenizer: PreTrainedTokenizer, model: PeftModel) -> None:

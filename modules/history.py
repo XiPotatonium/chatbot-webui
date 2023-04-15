@@ -13,7 +13,7 @@ from datetime import datetime
 
 def append_query_binding(state: State, binding: List, text: str, mm_type: str = "", mm_path: str = ""):
     if len(mm_type) != 0:
-        binding.append(((state.folder / mm_path, mm_type), None))
+        binding.append(((str(state.folder / mm_path), mm_type), None))
         # if has mm, only create a new text response if not empty
         if len(text) != 0:
             binding.append((text, None))

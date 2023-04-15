@@ -8,7 +8,7 @@ Now support:
 * [chatglm](https://huggingface.co/THUDM/chatglm-6b). `cfgs/chatglm-6b.json`
 * [BELLE-LLAMA-7B](https://huggingface.co/BelleGroup/BELLE-LLAMA-7B). `cfgs/belle-llama-7b-2m.json`
 * [blip2chatglm](https://github.com/XiPotatonium/LAVIS). `cfgs/blip2zh-chatglm-6b.json`. Currently only training code is provided, we will release pretrained model soon.
-* ChatGPT. You should first acquire your openai API and set your api key at `cfgs/chatgpt.json`
+* ChatGPT.
 
 
 目前支持下列模型:
@@ -17,7 +17,7 @@ Now support:
 * [chatglm](https://huggingface.co/THUDM/chatglm-6b). `cfgs/chatglm-6b.json`
 * [BELLE-LLAMA-7B](https://huggingface.co/BelleGroup/BELLE-LLAMA-7B). `cfgs/belle-llama-7b-2m.json`
 * [blip2chatglm](https://github.com/XiPotatonium/LAVIS). `cfgs/blip2zh-chatglm-6b.json`. 目前仅公开了训练代码，我们会在后续公开预训练的模型参数.
-* ChatGPT. 请先在`cfgs/chatgpt.json`设置申请好的openai API
+* ChatGPT.
 
 ## Usage
 

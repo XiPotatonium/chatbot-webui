@@ -1,9 +1,0 @@
-{
-    "files.watcherExclude": {
-        ".vscode/**": true,
-        "**/__pycache__/**": true,
-        "history/**": true,
-        "models/**": true,
-        "tmp/**": true
-    }
-}

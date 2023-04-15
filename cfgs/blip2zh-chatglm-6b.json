@@ -1,7 +1,6 @@
 {
     "model": "blip2chatglm",
     "model_path": "models/lm/blip2zh-chatglm-6b",
-    "lm_path": "models/lm/chatglm-6b",
     "prec": "fp16",
     "support_stream": true
 }

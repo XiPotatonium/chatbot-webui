@@ -1,0 +1,7 @@
+{
+    "model": "blip2chatglm-lora",
+    "model_path": "models/lm/blip2zh-chatglm-6b",
+    "lora_path": "/home/wsh/mmlm/output/2023-04-11_23-56-52.081805/checkpoint-50000",
+    "prec": "fp16",
+    "support_stream": true
+}
