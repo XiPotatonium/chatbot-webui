@@ -29,13 +29,9 @@ python launch.py cfgs/chatglm-6b.json
 
 You should first download the huggingface model and then save the model in the location set in the config.
 
-![](doc/img/chat-overview.png)
-
 * MultiModal chats
 
 blip2chatglm supports multimodal chats.
-
-![](doc/img/mm-chat-overview.png)
 
 -----------------------------------------------
 
@@ -47,10 +43,12 @@ python launch.py cfgs/chatglm-6b.json
 
 在启动之前，你需要先下载相关模型，并将模型保存到`json`配置文件中指定的位置一般是`model_path`
 
-![](doc/img/chat-overview.png)
-
 * 多模态聊天机器人
 
 目前只有blip2chatglm模型支持多模态聊天（图像和文本）。
 
-![](doc/img/mm-chat-overview.png)
+## Some examples of multi-modal chat
+
+![](doc/img/demo1.png)
+![](doc/img/demo2.png)
+![](doc/img/demo3.png)
