@@ -7,7 +7,7 @@ Now support:
 * [llama](https://huggingface.co/decapoda-research/llama-7b-hf) with [lora](https://huggingface.co/tloen/alpaca-lora-7b). `cfgs/llama-7b-hf-alpaca.json`
 * [chatglm](https://huggingface.co/THUDM/chatglm-6b). `cfgs/chatglm-6b.json`
 * [BELLE-LLAMA-7B](https://huggingface.co/BelleGroup/BELLE-LLAMA-7B). `cfgs/belle-llama-7b-2m.json`
-* [blip2chatglm](https://github.com/XiPotatonium/LAVIS). `cfgs/blip2zh-chatglm-6b.json`. Currently only training code is provided, we will release pretrained model soon.
+* [blip2chatglm](https://huggingface.co/Xipotzzz/blip2zh-chatglm-6b). `cfgs/blip2zh-chatglm-6b.json`.
 * ChatGPT.
 
 
@@ -16,7 +16,7 @@ Now support:
 * [llama](https://huggingface.co/decapoda-research/llama-7b-hf) with [lora](https://huggingface.co/tloen/alpaca-lora-7b). `cfgs/llama-7b-hf-alpaca.json`
 * [chatglm](https://huggingface.co/THUDM/chatglm-6b). `cfgs/chatglm-6b.json`
 * [BELLE-LLAMA-7B](https://huggingface.co/BelleGroup/BELLE-LLAMA-7B). `cfgs/belle-llama-7b-2m.json`
-* [blip2chatglm](https://github.com/XiPotatonium/LAVIS). `cfgs/blip2zh-chatglm-6b.json`. 目前仅公开了训练代码，我们会在后续公开预训练的模型参数.
+* [blip2chatglm](https://huggingface.co/Xipotzzz/blip2zh-chatglm-6b). `cfgs/blip2zh-chatglm-6b.json`.
 * ChatGPT.
 
 ## Usage
@@ -33,7 +33,7 @@ You should first download the huggingface model and then save the model in the l
 
 * MultiModal chats
 
-blip2chatglm supports multimodal chats. The model is imperfect at this stage and we will continue improving.
+blip2chatglm supports multimodal chats.
 
 ![](doc/img/mm-chat-overview.png)
 
@@ -52,6 +52,5 @@ python launch.py cfgs/chatglm-6b.json
 * 多模态聊天机器人
 
 目前只有blip2chatglm模型支持多模态聊天（图像和文本）。
-目前blipo2chatglm的效果并不完美，我们正在持续改进模型，并在后续公布预训练的参数。
 
 ![](doc/img/mm-chat-overview.png)
