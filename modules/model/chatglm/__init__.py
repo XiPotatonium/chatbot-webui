@@ -2,9 +2,9 @@ import sys
 from loguru import logger
 import torch
 from ...sym import sym_tbl
-from ...state import State
+from ...state import State, ROLE_BOT, ROLE_SYSTEM, ROLE_USER
 from ...device import empty_cache
-from ...history import append_response_binding, update_response_binding
+from ...history import append_last_message_binding, update_last_message_binding
 from .. import Model
 from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 from typing import Any, Dict, Tuple, Union, List
@@ -33,9 +33,9 @@ class ChatGLMModel(Model):
                 model = model.half().quantize(8)
         model.to(sym_tbl().device)
         model.eval()
-        if torch.__version__ >= "2" and sys.platform != "win32":
-            logger.info("Use torch.compile")
-            model = torch.compile(model)
+        # if torch.__version__ >= "2" and sys.platform != "win32":
+        #     logger.info("Use torch.compile")
+        #     model = torch.compile(model)
         sym_tbl().model = cls(tokenizer, model)
 
     def __init__(self, tokenizer: PreTrainedTokenizer, model: PreTrainedModel) -> None:
@@ -56,22 +56,32 @@ class ChatGLMModel(Model):
             **kwargs
     ):
         history = []
-        for info in state.history:
-            def convert(info: Dict[str, Any]):
-                text = info["text"]
-                mm_type = info["mm_type"]
-                if len(info["mm_type"]) != 0:
-                    logger.warning(
-                        f"{self.__class__.__name__} is a text-only model, but got {mm_type} input."
-                        "The media is ignored and only the text is used."
-                    )
-                return text
-            history.append((convert(info["query"]), convert(info["response"])))
-        query = history.pop()
-        instruction = state.history[-1]["query"]["instruction"]
-        if len(instruction) != 0:
-            logger.warning(f"{self.__class__.__name__} will ignore instruction {instruction}.")
-        query = query[0]
+        round_roles = []
+        for message in state.history:
+            text = message["content"]
+            role = message["role"]
+            media = message.get("media", None)
+            if media:
+                logger.warning(
+                    f"{self.__class__.__name__} is a text-only model, but got {media} input."
+                    "The media is ignored and only the text is used."
+                )
+
+            if len(round_roles) == 0 or role in round_roles[-1]:
+                history.append(("", ""))
+                round_roles.append({role})
+            else:
+                round_roles[-1].add(role)
+            if role == ROLE_BOT:
+                history[-1] = (history[-1][0], text)
+            elif role == ROLE_USER:
+                history[-1] = (text, history[-1][1])
+            else:
+                logger.warning(f"{self.__class__.__name__} got unknown role {role}. Ignored.")
+        query = history.pop()[0]
+
+        # print(history)
+        # print(query)
 
         for i, (output, _) in enumerate(self.model.stream_chat(
             self.tokenizer, query=query, history=history,
@@ -80,10 +90,11 @@ class ChatGLMModel(Model):
             temperature=temperature
         )):
             if i == 0:
-                yield append_response_binding(state, binding, output)
+                state.append_message_history(ROLE_BOT, output)
+                yield append_last_message_binding(state, binding)
             else:
-                yield update_response_binding(state, binding, output)
-        state.history[-1]["response"]["text"] = output
+                state.history[-1]["content"] = output
+                yield update_last_message_binding(state, binding)
         empty_cache()
 
 

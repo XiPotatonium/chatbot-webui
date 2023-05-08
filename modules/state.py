@@ -1,26 +1,21 @@
 from pathlib import Path
 
 
+ROLE_SYSTEM = "system"
+ROLE_USER = "user"
+ROLE_BOT = "assistant"
+
+
 class State:
     def __init__(self, folder: Path) -> None:
-        # state in dict format
+        # history in dict format
         self.history = []
         # base folder of mm in history
         self.folder = folder
 
-    def append_history_meta(self):
-        self.history.append(
-            {
-                "query": {
-                    "instruction": "",
-                    "text": "",
-                    "mm_type": "",          # Image/Video/Audio
-                    "mm_path": "",          # only filename, not full path
-                },
-                "response": {
-                    "text": "",
-                    "mm_type": "",
-                    "mm_path": "",
-                },
-            }
-        )
+    def append_message_history(self, role: str, content: str):
+        self.history.append({
+            "role": role,
+            "content": content
+            # "media": [],          list of media in (path, mime) format, optional
+        })

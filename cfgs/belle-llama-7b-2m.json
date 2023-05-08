@@ -1,5 +1,5 @@
 {
-    "model": "belle-llama",
+    "model": "llama-hf",
     "model_path": "models/lm/BELLE-LLAMA-7B-2M",
     "support_stream": false
 }

@@ -59,12 +59,11 @@ def alloc_cuda(
     pynvml.nvmlInit()
     driver = pynvml.nvmlSystemGetCudaDriverVersion_v2()
 
-    all_gpus = []
-    if "ALL_GPU" in os.environ:
-        all_gpus = list(map(int, os.environ["ALL_GPU"].split(",")))
-    if len(all_gpus) == 0:
-        # all_gpu not set by os.environ
-        all_gpus = list(range(pynvml.nvmlDeviceGetCount()))
+    visible_devices = []
+    if "CUDA_VISIBLE_DEVICES" in os.environ:
+        visible_devices = list(map(int, os.environ["CUDA_VISIBLE_DEVICES"].split(",")))
+    if len(visible_devices) == 0:
+        visible_devices = list(range(pynvml.nvmlDeviceGetCount()))
 
     gpu_queue: List[int] = []
     gpu_just_used: List[int] = []
@@ -78,7 +77,7 @@ def alloc_cuda(
             # pick one gpu for training
             while len(gpu_queue) == 0:
                 # detect free gpu if gpu queue is empty
-                available_gpus = set(all_gpus) - set(gpu_just_used)
+                available_gpus = set(visible_devices) - set(gpu_just_used)
                 if len(task_preferred_devices) == 0:
                     candidate_gpus = list(available_gpus)
                 else:

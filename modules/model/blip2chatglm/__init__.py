@@ -1,11 +1,12 @@
 import sys
+import os
 from loguru import logger
 import torch
 from ...sym import sym_tbl
-from ...state import State
+from ...state import State, ROLE_BOT, ROLE_SYSTEM, ROLE_USER
 from ...device import empty_cache
 from .. import Model
-from ...history import append_response_binding, update_response_binding
+from ...history import append_last_message_binding, update_last_message_binding
 from transformers import (
     AutoConfig,
     AutoModel,
@@ -17,7 +18,6 @@ from transformers import (
 )
 from typing import Any, Dict, List, Tuple, Union
 import gradio as gr
-from peft import PeftModel
 from transformers.utils.constants import OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from PIL import Image
 
@@ -34,6 +34,18 @@ class Blip2ChatGLMModel(Model):
             sym_tbl().cfg["model_path"], trust_remote_code=True
         )
         model.setup_dtype(vision_encoder_dtype="fp16", lm_dtype=lm_dtype)
+
+        if "lora_path" in sym_tbl().cfg:
+            from peft import PeftModel, LoraConfig, get_peft_model
+            model.language_model = PeftModel.from_pretrained(
+                model.language_model,
+                sym_tbl().cfg["lora_path"],
+                # torch_dtype=torch.float16,
+            )
+            # peft_config = LoraConfig.from_pretrained(sym_tbl().cfg["lora_path"])
+            # model.language_model = get_peft_model(model.language_model, peft_config)
+            # model.load_state_dict(torch.load(os.path.join(sym_tbl().cfg["lora_path"], "adapter_model.bin")), strict=False)
+
         model.to(sym_tbl().device)
         model.eval()
 
@@ -69,38 +81,29 @@ class Blip2ChatGLMModel(Model):
         empty_cache()
 
     def prepare_input(self, state: State):
-        history = []
+        messages = []
         # DISCUSS: should we add a field to state to store chat history for inference?
         # PROS: save conversion time
         # CONS: memory consuming, especially for mm history
-        for info in state.history:
+        role_mapping = {ROLE_USER: "问", ROLE_BOT: "答", ROLE_SYSTEM: "指令"}
+        for message in state.history:
+            role = role_mapping[message["role"]]
+            text = message["content"]
+            medias = []
+            for mm_path, mime in message.get("media", []):
+                if mime == "image/jpeg" or mime == "image/png":
+                    pixel_values = self.pixel_processor(
+                        Image.open(state.folder / mm_path).convert("RGB"), return_tensors="pt"
+                    ).pixel_values.to(sym_tbl().device)
+                    medias.append((pixel_values, 0))            # insert at index 0 by default
+                else:
+                    logger.warning(
+                        f"{self.__class__.__name__} is a text-image model, but got {mime} input."
+                        "The media is ignored and only the text is used."
+                    )
 
-            def convert(info: Dict[str, Any]):
-                text = info["text"]
-                mm_type = info["mm_type"]
-                if len(info["mm_type"]) != 0:
-                    mm_path = state.folder / info["mm_path"]
-                    if info["mm_type"] == "Image":
-                        pixel_values = self.pixel_processor(
-                            Image.open(mm_path).convert("RGB"), return_tensors="pt"
-                        ).pixel_values.to(sym_tbl().device)
-                        return (text, pixel_values)
-                    else:
-                        logger.warning(
-                            f"{self.__class__.__name__} is a text-image model, but got {mm_type} input."
-                            "The media is ignored and only the text is used."
-                        )
-                return text
-
-            history.append((convert(info["query"]), convert(info["response"])))
-        query = history.pop()
-        instruction = state.history[-1]["query"]["instruction"]
-        if len(instruction) != 0:
-            logger.warning(
-                f"{self.__class__.__name__} will ignore instruction {instruction}."
-            )
-        query = query[0]
-        return query, history
+            messages.append((role, text, medias))
+        return messages
 
     def stream_generate(
         self,
@@ -111,76 +114,27 @@ class Blip2ChatGLMModel(Model):
         temperature: float = 0.95,
         **kwargs,
     ):
-        query, history = self.prepare_input(state)
+        messages = self.prepare_input(state)
+
+        # print(list(map(lambda x: (x[0], x[1], [(m.shape, pos) for m, pos in x[2]]), messages)))
 
         with torch.cuda.amp.autocast(enabled=True):
             for i, output in enumerate(
                 self.model.stream_chat(
                     self.tokenizer,
-                    query=query,
-                    history=history,
+                    messages=messages,
                     max_length=max_tokens,
                     top_p=top_p,
                     temperature=temperature,
                 )
             ):
                 if i == 0:
-                    yield append_response_binding(state, binding, output)
+                    state.append_message_history(ROLE_BOT, output)
+                    yield append_last_message_binding(state, binding)
                 else:
-                    yield update_response_binding(state, binding, output)
-        state.history[-1]["response"]["text"] = output
+                    state.history[-1]["content"] = output
+                    yield update_last_message_binding(state, binding)
         empty_cache()
-
-
-class Blip2ChatGLMLoraModel(Blip2ChatGLMModel):
-    @classmethod
-    def load(cls):
-        tokenizer = AutoTokenizer.from_pretrained(
-            sym_tbl().cfg["lm_path"], trust_remote_code=True
-        )
-        lm = ChatGLMForConditionalGeneration.from_pretrained(
-            sym_tbl().cfg["lm_path"],  # device_map="auto"
-        )
-
-        if sym_tbl().device_info["device"] == "cpu":
-            lm = lm.float()
-        else:
-            prec = sym_tbl().cfg["prec"]
-            if prec == "fp16":
-                lm = lm.half()
-            elif prec == "int4":
-                lm = lm.half().quantize(4)
-            elif prec == "int8":
-                lm = lm.half().quantize(8)
-
-        blip2 = Blip2ForChatGLM.from_pretrained(
-            sym_tbl().cfg["model_path"],
-        )
-        blip2_config = Blip2ChatGLMConfig.from_pretrained(
-            sym_tbl().cfg["model_path"],
-        )
-
-        model = Blip2ChatGLM(blip2_config, blip2, lm)
-        model = PeftModel.from_pretrained(
-            model,
-            sym_tbl().cfg["lora_path"],
-            # torch_dtype=torch.float16,
-        )
-        model.to(sym_tbl().device)
-        model.eval()
-
-        # if torch.__version__ >= "2" and sys.platform != "win32":
-        #     logger.info("Use torch.compile")
-        #     model = torch.compile(model)
-
-        image_size = model.blip2.config.vision_config.image_size
-        image_processor = BlipImageProcessor(
-            size={"height": image_size, "width": image_size},
-            image_mean=OPENAI_CLIP_MEAN,
-            image_std=OPENAI_CLIP_STD,
-        )
-
-        sym_tbl().model = cls(tokenizer, image_processor, model)
 
 
 BLIP2CHATGLM_CSS = """

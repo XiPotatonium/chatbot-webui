@@ -2,11 +2,10 @@ import sys
 from loguru import logger
 from ...sym import sym_tbl
 from ...device import empty_cache
-from ...state import State
-from ...history import append_response_binding, update_response_binding
+from ...state import State, ROLE_BOT, ROLE_USER, ROLE_SYSTEM
+from ...history import append_last_message_binding
 from .. import Model
-from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig, PreTrainedTokenizer
-from peft import PeftModel
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig, PreTrainedTokenizer, PreTrainedModel
 from typing import Any, Dict, Tuple, Union, List
 import torch
 import gradio as gr
@@ -16,16 +15,17 @@ class LlamaHFModel(Model):
     @classmethod
     def load(cls):
         path = sym_tbl().cfg["model_path"]
-        lora_path = sym_tbl().cfg["lora_path"]
         tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
         model = AutoModelForCausalLM.from_pretrained(
             path, trust_remote_code=True, torch_dtype=torch.float16,
         )
-        model = PeftModel.from_pretrained(
-            model,
-            lora_path,
-            torch_dtype=torch.float16,
-        )
+        if "lora_path" in sym_tbl().cfg:
+            from peft import PeftModel
+            model = PeftModel.from_pretrained(
+                model,
+                sym_tbl().cfg["lora_path"],
+                torch_dtype=torch.float16,
+            )
         model.half()
         model.to(sym_tbl().device)
         model.eval()
@@ -34,7 +34,7 @@ class LlamaHFModel(Model):
         #     model = torch.compile(model)
         sym_tbl().model = cls(tokenizer, model)
 
-    def __init__(self, tokenizer: PreTrainedTokenizer, model: PeftModel) -> None:
+    def __init__(self, tokenizer: PreTrainedTokenizer, model: PreTrainedModel) -> None:
         self.tokenizer = tokenizer
         self.model = model
 
@@ -54,39 +54,37 @@ class LlamaHFModel(Model):
             beams,
             **kwargs
     ):
-        def generate_prompt(instruction, input=None):
-            if input:
-                return f"""Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
-### Instruction:
-{instruction}
-### Input:
-{input}
-### Response:"""
-            else:
-                return f"""Below is an instruction that describes a task. Write a response that appropriately completes the request.
-### Instruction:
-{instruction}
-### Response:"""
+        role_mapping = {ROLE_BOT: "### Response", ROLE_USER: "### Input", ROLE_SYSTEM: "### Instruction"}
+#         def generate_prompt(instruction, input=None):
+#             if input:
+#                 return f"""Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
+# ### Instruction:
+# {instruction}
+# ### Input:
+# {input}
+# ### Response:"""
+#             else:
+#                 return f"""Below is an instruction that describes a task. Write a response that appropriately completes the request.
+# ### Instruction:
+# {instruction}
+# ### Response:"""
 
-        history = []
-        for info in state.history:
-            def convert(info: Dict[str, Any]):
-                text = info["text"]
-                mm_type = info["mm_type"]
-                if len(info["mm_type"]) != 0:
-                    logger.warning(
-                        f"{self.__class__.__name__} is a text-only model, but got {mm_type} input."
-                        "The media is ignored and only the text is used."
-                    )
-                return text
-            history.append((convert(info["query"]), convert(info["response"])))
-        query = history.pop()
-        instruction = state.history[-1]["query"]["instruction"]
-        query = query[0]
+        prompt = ""
+        for message in state.history:
+            role = role_mapping[message["role"]]
+            text = message["content"]
+            prompt += f"{role}:\n{text}\n"
+        prompt += '{}:\n'.format(role_mapping[ROLE_BOT])
+        # BELLE format:
+        # role_mapping = {ROLE_BOT: "Assistant", ROLE_USER: "Human"}
+        # for message in state.history:
+        #     role = role_mapping[message["role"]]
+        #     text = message["content"]
+        #     prompt += f"{role}: {text} \n\n"
+        # prompt += '{}: '.format(role_mapping[ROLE_BOT])
 
-        # TODO: how to incoporate chat history?
-        prompt = generate_prompt(instruction, query)
-        # print(f"usr: {prompt}")
+        # print(prompt)
+
         inputs = self.tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"].to(sym_tbl().device)
         generation_config = GenerationConfig(
@@ -106,12 +104,13 @@ class LlamaHFModel(Model):
         s = generation_output.sequences[0]
         output = self.tokenizer.decode(s)
         # print("bot: {}".format(output.split("### Response:")[1].strip()))
-        output = output.split("### Response:")[1].strip()
+        output = output.strip()[len(prompt):].strip()
+        # logger.debug(output)
 
         empty_cache()
 
-        state.history[-1]["response"]["text"] = output
-        return append_response_binding(state, binding, output)
+        state.append_message_history(ROLE_BOT, output)
+        return append_last_message_binding(state, binding)
 
 
 LLAMA_HF_CSS = """

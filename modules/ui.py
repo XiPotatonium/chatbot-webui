@@ -3,8 +3,8 @@ from typing import List, Optional
 import gradio as gr
 from loguru import logger
 from .sym import sym_tbl
-from .state import State
-from .history import load_history, save_history, append_query_binding, sync_last_history
+from .state import State, ROLE_SYSTEM, ROLE_BOT, ROLE_USER
+from .history import load_history, save_history, append_last_message_binding, sync_last_history
 
 
 _css = """
@@ -25,13 +25,16 @@ _css = """
 def send(state: State, binding, msg: str, instruction: str, mm_ty: str, img, audio, video):
     msg = msg if msg is not None else ""
     instruction = instruction if instruction is not None else ""
+    if len(instruction) != 0:
+        state.append_message_history(role=ROLE_SYSTEM, content=instruction)
+        append_last_message_binding(state, binding)
+
+    mm_path = None
     if (
         (mm_ty == "Image" and img is not None) or
         (mm_ty == "Audio" and audio is not None) or
         (mm_ty == "Video" and video is not None)
     ):
-        mm_type = mm_ty
-
         from PIL import Image
         import uuid
         if isinstance(img, Image.Image):
@@ -39,21 +42,18 @@ def send(state: State, binding, msg: str, instruction: str, mm_ty: str, img, aud
             if mm_path.exists():
                 raise FileExistsError(f"File {mm_path} already exists. WTF?")
             img.save(mm_path, "PNG")
+            mime = "image/png"
         else:
             raise NotImplementedError()
 
         mm_path = mm_path.name         # may be serialized to json, convert to string format
-    else:
-        mm_type = ""
-        mm_path = ""
-    state.append_history_meta()
-    state.history[-1]["query"]["text"] = msg
-    state.history[-1]["query"]["instruction"] = instruction
-    state.history[-1]["query"]["mm_type"] = mm_type
-    state.history[-1]["query"]["mm_path"] = mm_path
-    if len(instruction) != 0:
-        append_query_binding(state, binding, f"[INSTRUCTION] {instruction}")
-    return append_query_binding(state, binding, msg, mm_type, mm_path)
+    if len(msg) != 0 or mm_path is not None:
+        state.append_message_history(role=ROLE_USER, content=msg)
+        if mm_path is not None:
+            state.history[-1]["media"] = [[mm_path, mime]]          # currently only 1 image in media
+        append_last_message_binding(state, binding)
+
+    return binding
 
 
 def predict(*args, **kwargs):
@@ -149,7 +149,7 @@ def create_ui():
             queue=False,
         ).then(
             # clear textbox and mm
-            fn=lambda: (None, None), outputs=[msg, radio_mm]
+            fn=lambda: (None, None, None), outputs=[instruction, msg, radio_mm]
         ).then(
             # predict
             # update chatbot with output text

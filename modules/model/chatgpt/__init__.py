@@ -1,8 +1,8 @@
 import sys
 from loguru import logger
 from ...sym import sym_tbl
-from ...state import State
-from ...history import append_response_binding, update_response_binding
+from ...state import State, ROLE_SYSTEM, ROLE_BOT, ROLE_USER
+from ...history import append_last_message_binding, update_last_message_binding
 from .. import Model
 from typing import Any, Dict, Tuple, Union, List
 
@@ -37,27 +37,23 @@ class ChatGPTModel(Model):
     ):
         openai.api_key = api_key
 
-        history = []
-        instruction = state.history[-1]["query"]["instruction"]
-        if len(instruction) != 0:
-            history.append({"role": "system", "content": instruction})
-        for info in state.history:
-            def convert(info: Dict[str, Any]):
-                text = info["text"]
-                mm_type = info["mm_type"]
-                if len(info["mm_type"]) != 0:
-                    logger.warning(
-                        f"{self.__class__.__name__} is a text-only model, but got {mm_type} input."
-                        "The media is ignored and only the text is used."
-                    )
-                return text
-            history.append({"role": "user", "content": convert(info["query"])})
-            history.append({"role": "assistant", "content": convert(info["response"])})
-        history.pop()       # pop last assistant (it is empty)
+        role_mapping = {ROLE_BOT: "assistant", ROLE_USER: "user", ROLE_SYSTEM: "system"}
+
+        messages = []
+        for message in state.history:
+            media = message.get("media", None)
+            if media:
+                logger.warning(
+                    f"{self.__class__.__name__} is a text-only model, but got {media} input."
+                    "The media is ignored and only the text is used."
+                )
+            messages.append({"role": role_mapping[message["role"]], "content": message["content"]})
+
+        print(messages)
 
         response = openai.ChatCompletion.create(
             model=self.model,
-            messages=history,
+            messages=messages,
             temperature=temperature,
             top_p=top_p,
             stream=True  # again, we set stream=True
@@ -70,10 +66,11 @@ class ChatGPTModel(Model):
             chunk_message = chunk['choices'][0]['delta']  # extract the message
             output += chunk_message.get('content', '')
             if i == 0:
-                yield append_response_binding(state, binding, output)
+                state.append_message_history(ROLE_BOT, output)
+                yield append_last_message_binding(state, binding)
             else:
-                yield update_response_binding(state, binding, output)
-        state.history[-1]["response"]["text"] = output
+                state.history[-1]["content"] = output
+                yield update_last_message_binding(state, binding)
 
 
 CHATGPT_CSS = """

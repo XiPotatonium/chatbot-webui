@@ -19,16 +19,20 @@ class Proto:
 
 
 MAPPING = {
-    "chatglm": Proto("modules.model.chatglm", "ChatGLMModel", UIProto("CHATGLM_CSS", "chatglm_ui")),
+    "chatglm": Proto(
+        "modules.model.chatglm", "ChatGLMModel", UIProto("CHATGLM_CSS", "chatglm_ui")
+    ),
     "blip2chatglm": Proto(
-        "modules.model.blip2chatglm", "Blip2ChatGLMModel", UIProto("BLIP2CHATGLM_CSS", "blip2chatglm_ui")
+        "modules.model.blip2chatglm",
+        "Blip2ChatGLMModel",
+        UIProto("BLIP2CHATGLM_CSS", "blip2chatglm_ui"),
     ),
-    "blip2chatglm-lora": Proto(
-        "modules.model.blip2chatglm", "Blip2ChatGLMLoraModel", UIProto("BLIP2CHATGLM_CSS", "blip2chatglm_ui")
+    "llama-hf": Proto(
+        "modules.model.llama", "LlamaHFModel", UIProto("LLAMA_HF_CSS", "llama_hf_ui")
     ),
-    "llama-hf": Proto("modules.model.llama", "LlamaHFModel", UIProto("LLAMA_HF_CSS", "llama_hf_ui")),
-    "belle-llama": Proto("modules.model.belle", "BelleLlamaModel", UIProto("BELLE_CSS", "belle_ui")),
-    "chatgpt": Proto("modules.model.chatgpt", "ChatGPTModel", UIProto("CHATGPT_CSS", "chatgpt_ui")),
+    "chatgpt": Proto(
+        "modules.model.chatgpt", "ChatGPTModel", UIProto("CHATGPT_CSS", "chatgpt_ui")
+    ),
 }
 
 

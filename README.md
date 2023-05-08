@@ -3,14 +3,6 @@
 ## Supported models and their config files
 
 Now support:
-
-* [llama](https://huggingface.co/decapoda-research/llama-7b-hf) with [lora](https://huggingface.co/tloen/alpaca-lora-7b). `cfgs/llama-7b-hf-alpaca.json`
-* [chatglm](https://huggingface.co/THUDM/chatglm-6b). `cfgs/chatglm-6b.json`
-* [BELLE-LLAMA-7B](https://huggingface.co/BelleGroup/BELLE-LLAMA-7B). `cfgs/belle-llama-7b-2m.json`
-* [blip2chatglm](https://huggingface.co/Xipotzzz/blip2zh-chatglm-6b). `cfgs/blip2zh-chatglm-6b.json`.
-* ChatGPT.
-
-
 目前支持下列模型:
 
 * [llama](https://huggingface.co/decapoda-research/llama-7b-hf) with [lora](https://huggingface.co/tloen/alpaca-lora-7b). `cfgs/llama-7b-hf-alpaca.json`
@@ -18,6 +10,10 @@ Now support:
 * [BELLE-LLAMA-7B](https://huggingface.co/BelleGroup/BELLE-LLAMA-7B). `cfgs/belle-llama-7b-2m.json`
 * [blip2chatglm](https://huggingface.co/Xipotzzz/blip2zh-chatglm-6b). `cfgs/blip2zh-chatglm-6b.json`.
 * ChatGPT.
+
+TODO:
+
+* select prompt schema
 
 ## Usage
 
